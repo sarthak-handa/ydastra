@@ -1231,23 +1231,23 @@
                 <table class="table table-bordered table-hover assemblies mb-0 align-middle" id="assembliesTable" style="font-size: 0.88rem;">
                   <thead class="sticky-top shadow-sm" style="background-color: #2b4964; color: white;">
                     <tr id="assembliesHeaderRow" class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">
-                      <th class="sortable text-nowrap py-2" data-sort-key="srNo" onclick="toggleAssembliesSort('srNo')" style="width: 90px; cursor: pointer; color: white;"><span class="toggle-chevron open text-white me-1" onclick="toggleAllAssemblies(event, this)"><i class="fa fa-chevron-right"></i></span>SR <i class="fa fa-sort opacity-50 ms-1"></i></th>
-                      <th class="sortable py-2" data-sort-key="assemblyName" onclick="toggleAssembliesSort('assemblyName')" style="width: 220px; cursor: pointer; color: white;">ASSEMBLY <i class="fa fa-sort opacity-50 ms-1"></i></th>
-                      <th class="sortable py-2" data-sort-key="drawingDocNo" onclick="toggleAssembliesSort('drawingDocNo')" style="width: 180px; cursor: pointer; color: white;">DOC NO <i class="fa fa-sort opacity-50 ms-1"></i></th>
+                      <th class="sortable text-nowrap py-2" data-sort-key="srNo" onclick="toggleAssembliesSort('srNo')" style="width: 70px; cursor: pointer; color: white;"><span class="toggle-chevron text-white me-1" onclick="toggleAllAssemblies(event, this)"><i class="fa fa-chevron-right"></i></span>SR <i class="fa fa-sort opacity-50 ms-1"></i></th>
+                      <th class="sortable py-2" data-sort-key="assemblyName" onclick="toggleAssembliesSort('assemblyName')" style="min-width: 250px; cursor: pointer; color: white;">ASSEMBLY <i class="fa fa-sort opacity-50 ms-1"></i></th>
+                      <th class="sortable py-2" data-sort-key="drawingDocNo" onclick="toggleAssembliesSort('drawingDocNo')" style="width: 150px; cursor: pointer; color: white;">DOC NO <i class="fa fa-sort opacity-50 ms-1"></i></th>
                       <th style="width: 60px; color: white;" class="text-center py-2">QTY</th>
                       <th class="sortable text-center py-2" data-sort-key="releaseWeek" onclick="toggleAssembliesSort('releaseWeek')" style="width: 110px; cursor: pointer; color: white;">RELEASE WEEK <i class="fa fa-sort opacity-50 ms-1"></i></th>
                       <th class="sortable text-center py-2" data-sort-key="status" onclick="toggleAssembliesSort('status')" style="width: 100px; cursor: pointer; color: white;">STATUS <i class="fa fa-sort opacity-50 ms-1"></i></th>
-                      <th style="width: 480px; color: white;" class="py-2">DRAWINGS AND BOM UPLOAD</th>
+                      <th style="width: 420px; color: white;" class="py-2">DRAWINGS AND BOM UPLOAD</th>
                     </tr>
                     <!-- Sub-Search Row -->
-                    <tr id="assembliesSearchRow">
-                      <td class="p-1 border-0"><input type="text" id="colSearchSr" class="form-control form-control-sm text-center py-1 px-2 border-0" placeholder="SR" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1 border-0"><input type="text" id="colSearchAssembly" class="form-control form-control-sm py-1 px-2 border-0" placeholder="Assembly" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1 border-0"><input type="text" id="colSearchDocNo" class="form-control form-control-sm py-1 px-2 border-0" placeholder="Doc No" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1 border-0"><input type="text" disabled class="form-control form-control-sm text-center py-1 px-2 border-0 bg-white" placeholder="Qty" /></td>
-                      <td class="p-1 border-0"><input type="text" id="colSearchReleaseWeek" class="form-control form-control-sm text-center py-1 px-2 border-0" placeholder="Release Week" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1 border-0"><input type="text" id="colSearchStatus" class="form-control form-control-sm text-center py-1 px-2 border-0" placeholder="Status" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1 border-0"></td>
+                    <tr id="assembliesSearchRow" class="bg-white">
+                      <td class="p-1"><input type="text" id="colSearchSr" class="form-control form-control-sm text-center py-1 px-2" placeholder="SR" onkeyup="renderAssemblies()" /></td>
+                      <td class="p-1"><input type="text" id="colSearchAssembly" class="form-control form-control-sm py-1 px-2" placeholder="Assembly" onkeyup="renderAssemblies()" /></td>
+                      <td class="p-1"><input type="text" id="colSearchDocNo" class="form-control form-control-sm py-1 px-2" placeholder="Doc No" onkeyup="renderAssemblies()" /></td>
+                      <td class="p-1"><input type="text" disabled class="form-control form-control-sm text-center py-1 px-2 bg-light" placeholder="Qty" /></td>
+                      <td class="p-1"><input type="text" id="colSearchReleaseWeek" class="form-control form-control-sm text-center py-1 px-2" placeholder="Release Week" onkeyup="renderAssemblies()" /></td>
+                      <td class="p-1"><input type="text" id="colSearchStatus" class="form-control form-control-sm text-center py-1 px-2" placeholder="Status" onkeyup="renderAssemblies()" /></td>
+                      <td class="p-1"></td>
                     </tr>
                   </thead>
                   <tbody id="assembliesBody"></tbody>
@@ -4527,10 +4527,19 @@
       }
 
       const sr = String(a.generatedSr || a.srNo || "");
-      const rowClasses = (opts.isParent ? "parent-row bg-light" : `child-row child-of-${opts.parentKey}${opts.startOpen ? "" : " d-none"}`) + (opts.isParent ? " sr-whole-row" : "");
+      const isTrueChild = sr.includes('.') && !sr.endsWith('.0');
+      
+      let rowClasses = "";
+      if (opts.isParent) {
+        rowClasses = "parent-row bg-light sr-whole-row";
+      } else if (isTrueChild) {
+        rowClasses = `child-row child-of-${opts.parentKey}${opts.startOpen ? "" : " d-none"}`;
+      } else {
+        rowClasses = "standalone-row bg-white";
+      }
 
-      const chevron = opts.isParent
-        ? (opts.hasChildren ? `<span class="toggle-chevron${opts.startOpen ? " open" : ""} me-2 text-dark cursor-pointer" onclick="toggleChildren('${opts.parentKey}', this)"><i class="fa fa-chevron-right"></i></span>` : `<span class="toggle-chevron invisible me-2"><i class="fa fa-chevron-right"></i></span>`)
+      const chevron = opts.isParent && opts.hasChildren
+        ? `<span class="toggle-chevron${opts.startOpen ? " open" : ""} position-absolute start-0 ms-2 text-dark cursor-pointer" onclick="toggleChildren('${opts.parentKey}', this)"><i class="fa fa-chevron-right"></i></span>`
         : "";
 
       if (opts.isParent) {
@@ -4550,7 +4559,7 @@
 
         return `
           <tr class="${rowClasses}" data-assembly-id="${a._id}">
-            <td class="fw-bold text-center py-1"><div class="d-flex align-items-center justify-content-center">${chevron} <span title="Excel Sheet SR: ${escapeHtml(a.srNo || '')}">${escapeHtml(displaySr)}</span></div></td>
+            <td class="fw-bold text-center py-1 position-relative">${chevron}<span title="Excel Sheet SR: ${escapeHtml(a.srNo || '')}">${escapeHtml(displaySr)}</span></td>
             <td class="py-1"><strong class="text-dark fs-6">${escapeHtml(a.assemblyName || "")}</strong></td>
             <td class="py-1"><code class="small fw-bold" style="color: #d63384; font-family: monospace; font-size: 0.85rem;">${escapeHtml(a.drawingDocNo || "-")}</code></td>
             <td class="text-center fw-bold text-secondary py-1">${escapeHtml(a.qty || "")}</td>
@@ -4721,7 +4730,7 @@
           html += rowHtml(a, {
             isParent: isParent,
             hasChildren: children.length > 0,
-            startOpen: true,
+            startOpen: false,
             parentKey: kSafe
           });
         }
