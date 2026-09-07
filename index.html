@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-  <title>YD Ascend Assembly Flow | YOGIJI DIGI</title>
+  <title>YD Ascend Project Panel | YOGIJI DIGI</title>
 
   <link href="yd-favicon.png" rel="icon" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -14,7 +14,9 @@
   <link rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
@@ -36,7 +38,15 @@
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
 
-    h1, h2, h3, h4, h5, h6, .page-title, .modal-title, .content-card h2 {
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    .page-title,
+    .modal-title,
+    .content-card h2 {
       font-family: 'Nunito', sans-serif !important;
     }
 
@@ -91,8 +101,15 @@
 
     /* --- MAIN CONTENT --- */
     .main {
-      padding: 40px 0;
-      min-height: calc(100vh - 200px);
+      margin-top: 80px;
+      padding: 20px 0;
+      min-height: 80vh;
+    }
+
+    /* Live drawings.html overrides: main { margin-top: 30px; margin-bottom: 0 } */
+    .main.drawings-mode {
+      margin-top: 30px;
+      margin-bottom: 0;
     }
 
     .table-container {
@@ -204,18 +221,20 @@
       background-color: #f1f4f9 !important;
     }
 
-    /* YDComplan Assemblies Table Styling */
+    /* YDAstra Assemblies Table Styling */
     #ydcAssemblyGridTable th {
       cursor: pointer;
       user-select: none;
       padding: 4px 8px !important;
       font-size: 0.85rem;
     }
+
     .ydc-main-row {
       height: 24px !important;
       background-color: #e2e8f0 !important;
       font-weight: bold;
     }
+
     .ydc-main-row td {
       height: 24px !important;
       line-height: 24px !important;
@@ -223,11 +242,13 @@
       font-size: 0.82rem;
       vertical-align: middle;
     }
+
     .ydc-sub-row {
       height: 21px !important;
       background-color: #ffffff !important;
       color: #4b5563;
     }
+
     .ydc-sub-row td {
       height: 21px !important;
       line-height: 21px !important;
@@ -235,6 +256,7 @@
       font-size: 0.82rem;
       vertical-align: middle;
     }
+
     .ydc-chevron-parent {
       transition: transform 0.2s;
     }
@@ -244,10 +266,11 @@
       min-width: 160px;
       font-size: 0.85rem;
       border-radius: 6px;
-      border: 1px solid rgba(0,0,0,0.15);
+      border: 1px solid rgba(0, 0, 0, 0.15);
       background: white;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
+
     #ydcContextMenu .dropdown-item {
       padding: 6px 16px;
       cursor: pointer;
@@ -255,10 +278,12 @@
       align-items: center;
       color: #333;
     }
+
     #ydcContextMenu .dropdown-item:hover {
       background-color: #f1f5f9;
       color: #000;
     }
+
     .ydc-chevron-parent {
       transition: transform 0.2s;
     }
@@ -387,6 +412,149 @@
       margin-top: 8px;
       text-align: center;
       line-height: 1.2;
+    }
+
+
+    /* ---- Live kickOff.html: title bar + toolbar ------------------------- */
+    .panel-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .panel-header h2.page-title {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .panel-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+
+    .panel-toolbar .btn {
+      --tb-fg: var(--yd-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      height: 36px;
+      padding: 0 0.85rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
+      border: 1px solid var(--yd-primary);
+      background: #fff;
+      color: var(--tb-fg);
+      box-shadow: none;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .panel-toolbar .btn i {
+      font-size: 0.85rem;
+      line-height: 1;
+      margin: 0;
+    }
+
+    .panel-toolbar .btn:hover,
+    .panel-toolbar .btn:focus-visible {
+      background: var(--yd-primary);
+      border-color: var(--yd-primary);
+      color: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 3px 10px rgba(42, 80, 113, 0.25);
+    }
+
+    .panel-toolbar .btn-tb-primary {
+      background: var(--yd-primary);
+      border-color: var(--yd-primary);
+      color: #fff;
+    }
+
+    .panel-toolbar .btn-tb-primary:hover,
+    .panel-toolbar .btn-tb-primary:focus-visible {
+      background: #1f3d57;
+      border-color: #1f3d57;
+    }
+
+    .panel-toolbar .btn-tb-accent {
+      background: var(--yd-red);
+      border-color: var(--yd-red);
+      color: #fff;
+    }
+
+    .panel-toolbar .btn-tb-accent:hover,
+    .panel-toolbar .btn-tb-accent:focus-visible {
+      background: #8e2034;
+      border-color: #8e2034;
+      color: #fff;
+      box-shadow: 0 3px 10px rgba(173, 40, 63, 0.28);
+    }
+
+    .panel-toolbar .btn-tb-icon {
+      width: 36px;
+      padding: 0;
+    }
+
+    @media (max-width: 767.98px) {
+      .panel-header {
+        gap: 0.75rem;
+      }
+
+      .panel-toolbar {
+        justify-content: flex-start;
+      }
+    }
+
+    /* ---- Live kickOff.html: skipped stepper step (Finance bypassed) ----- */
+    .stepper-item.skipped .step-counter {
+      background-color: #fff;
+      color: #adb5bd;
+      border: 3px dashed #ced4da;
+    }
+
+    .stepper-item.skipped .step-name {
+      color: #adb5bd;
+      font-style: italic;
+    }
+
+    .stepper-item.skipped::after {
+      border-bottom: 3px dashed #dee2e6;
+    }
+
+    /* ---- Live kickOff.html: PM project-count pill (Assign PM picker) ---- */
+    .pm-count-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    }
+
+    .pm-count-badge-eye {
+      opacity: 0.75;
+    }
+
+    .pm-count-badge:hover,
+    .pm-count-badge:focus-visible {
+      filter: brightness(0.94);
+      box-shadow: 0 0 0 2px rgba(42, 80, 113, 0.25);
+      transform: translateY(-1px);
+      text-decoration-style: solid;
+    }
+
+    .pm-count-badge:hover .pm-count-badge-eye {
+      opacity: 1;
+    }
+
+    .pm-count-badge:active {
+      transform: translateY(0);
     }
 
     /* Compact density for the main kickoff table so it fits inside a laptop viewport */
@@ -601,15 +769,24 @@
       overflow: hidden;
     }
 
-    table.assemblies, #ydcAssemblyGridTable, #ydcExcelTable, .ydc-table {
+    table.assemblies,
+    #ydcAssemblyGridTable,
+    #ydcExcelTable,
+    .ydc-table {
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
 
-    table.assemblies thead, #ydcAssemblyGridTable thead, #ydcExcelTable thead, .ydc-table thead {
+    table.assemblies thead,
+    #ydcAssemblyGridTable thead,
+    #ydcExcelTable thead,
+    .ydc-table thead {
       background: #2a5071 !important;
     }
 
-    table.assemblies th, #ydcAssemblyGridTable th, #ydcExcelTable th, .ydc-table th {
+    table.assemblies th,
+    #ydcAssemblyGridTable th,
+    #ydcExcelTable th,
+    .ydc-table th {
       background: #2a5071 !important;
       color: #fff !important;
       font-size: 0.78rem !important;
@@ -632,11 +809,15 @@
       z-index: 10;
     }
 
-    .ydc-col-resizer:hover, .ydc-col-resizer.resizing {
+    .ydc-col-resizer:hover,
+    .ydc-col-resizer.resizing {
       background: #38bdf8 !important;
     }
 
-    table.assemblies thead th, #ydcAssemblyGridTable thead th, #ydcExcelTable thead th, .ydc-table thead th {
+    table.assemblies thead th,
+    #ydcAssemblyGridTable thead th,
+    #ydcExcelTable thead th,
+    .ydc-table thead th {
       border-color: rgba(255, 255, 255, 0.28) !important;
     }
 
@@ -679,7 +860,10 @@
       display: none !important;
     }
 
-    table.assemblies td, #ydcAssemblyGridTable td, #ydcExcelTable td, .ydc-table td {
+    table.assemblies td,
+    #ydcAssemblyGridTable td,
+    #ydcExcelTable td,
+    .ydc-table td {
       font-size: 0.85rem !important;
       vertical-align: middle !important;
       padding: 0.55rem 0.75rem !important;
@@ -755,6 +939,174 @@
       visibility: hidden;
     }
 
+    /* ---- Live drawings.html: upload card, soft badges, BOM preview ------ */
+    .progress-bar.dwg-upload-bar {
+      background-color: var(--yd-red);
+    }
+
+    .badge-soft-danger {
+      background-color: #fdecec;
+      color: #b02a37;
+      border: 1px solid #f6d4d6;
+      font-weight: 600;
+    }
+
+    .badge-soft-muted {
+      background-color: #f4f6f8;
+      color: #6c757d;
+      border: 1px solid #e6e9ec;
+      font-weight: 600;
+    }
+
+    .up-sec {
+      border-radius: 6px;
+      padding: 6px;
+    }
+
+    .up-sec-drawing {
+      background-color: #eef4ff;
+      border: 1px solid #d6e4ff;
+    }
+
+    .up-sec-bom {
+      background-color: #eefbf1;
+      border: 1px solid #cdeed7;
+      margin-top: 8px;
+    }
+
+    .up-sec-files {
+      background-color: #f6f8fc;
+      border: 1px solid #dbe3ef;
+    }
+
+    .up-sec-files .up-sec-title {
+      color: var(--yd-primary);
+    }
+
+    .up-sec-files .btn-view-compact {
+      font-size: 0.75rem;
+      padding: 2px 6px;
+      line-height: 1.3;
+    }
+
+    .up-sec-files .btn-view-compact.btn-primary {
+      background-color: #2f7ff0;
+      border-color: #2f7ff0;
+      color: #fff;
+    }
+
+    .up-sec-files .btn-view-compact.btn-primary:hover,
+    .up-sec-files .btn-view-compact.btn-primary:focus {
+      background-color: #0b5ed7;
+      border-color: #0b5ed7;
+      color: #fff;
+    }
+
+    .up-sec-files .btn-view-compact.btn-success {
+      background-color: #1faa72;
+      border-color: #1faa72;
+      color: #fff;
+    }
+
+    .up-sec-files .btn-view-compact.btn-success:hover,
+    .up-sec-files .btn-view-compact.btn-success:focus {
+      background-color: #146c43;
+      border-color: #146c43;
+      color: #fff;
+    }
+
+    .up-sec-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+
+    .up-sec-drawing .up-sec-title {
+      color: #1d4ed8;
+    }
+
+    .up-sec-bom .up-sec-title {
+      color: #157347;
+    }
+
+    tr.parent-row:has(.toggle-chevron:not(.invisible)) {
+      cursor: pointer;
+    }
+
+    .swal-above-bs-modal {
+      z-index: 20000 !important;
+    }
+
+    .swal-input-label-spaced {
+      margin-top: 14px !important;
+      margin-bottom: 12px !important;
+      padding: 0 8px;
+      line-height: 1.45;
+    }
+
+    .swal-textarea-spaced {
+      margin-top: 8px !important;
+    }
+
+    .bom-status .bom-badge-uploaded {
+      background: #16a34a;
+      color: #fff;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .bom-status .bom-badge-missing {
+      background: #f3f4f6;
+      color: #6b7280;
+      border: 1px dashed #cbd5e1;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .bom-sheet-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .bom-sheet-tabs .btn.active {
+      background: var(--yd-primary);
+      color: #fff;
+    }
+
+    .bom-preview-wrap {
+      overflow: auto;
+      max-height: 60vh;
+      border: 1px solid #e6eaf0;
+      border-radius: 6px;
+    }
+
+    .bom-preview-wrap table {
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .bom-preview-wrap td,
+    .bom-preview-wrap th {
+      border: 1px solid #dbe2ea;
+      padding: 4px 8px;
+      white-space: nowrap;
+      vertical-align: top;
+    }
+
+    .bom-preview-wrap tr:first-child td {
+      background: #eef3f8;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
     .filter-row {
       display: flex;
       gap: 12px;
@@ -767,7 +1119,7 @@
       max-width: 320px;
     }
 
-    /* --- YDCOMPLAN EXECUTION LAYER --- */
+    /* --- YDASTRA EXECUTION LAYER --- */
     .ydc-workflow-card {
       cursor: pointer;
       transition: transform 0.18s, box-shadow 0.18s;
@@ -990,6 +1342,8 @@
         <div class="custom-nav-container">
           <a href="#" class="nav-btn-custom" style="background: #fde2e4; color: #9f1239">Report</a>
           <a href="#" class="nav-btn-custom" style="background: #fff4cc; color: #92400e">Meeting</a>
+          <a href="#" id="navYdAscend" class="nav-btn-custom" style="background: #baf1ac; color: #3f891b; display: none"
+            onclick="showDashboardView(); return false;">YD Ascend</a>
           <a href="#" class="nav-btn-custom" style="background: #e0f2fe; color: #0369a1" data-bs-toggle="modal"
             data-bs-target="#attendanceModal">Attendance</a>
         </div>
@@ -1029,29 +1383,29 @@
   <main class="main flex-grow-1">
     <div id="dashboardView">
       <div class="container table-container">
-        <div class="row align-items-center mb-4">
-          <div class="col-md-6">
-            <h2 class="page-title mb-0" style="background: transparent">Project Kick-Off Panel</h2>
-          </div>
-          <div class="col-md-6 text-end">
-            <div class="d-flex gap-2 justify-content-end align-items-center">
-              <button onclick="showDrawingsView()" class="btn btn-warning btn-sm text-light"
-                title="Show pending assemblies across all active projects">
-                <i class="fa fa-clock me-1"></i> Pending Drawings
-              </button>
-              <button onclick="showYDComplanView()" class="btn btn-success btn-sm"
-                title="YDComplan — Execution Control (available after LOE upload)">
-                <i class="fa fa-cogs me-1"></i> YDComplan
-              </button>
-              <button class="btn btn-primary btn-sm" id="btnNewProject" data-bs-toggle="modal"
-                data-bs-target="#createModal">
-                <i class="fa fa-plus me-1"></i> Initiate New Project
-              </button>
-              <a href="ascend.html" class="btn btn-danger btn-sm">Current Projects</a>
-              <a href="#" class="btn btn-primary btn-sm" title="Configure Users" id="btnUserConfig">
-                <i class="fa fa-gear"></i>
-              </a>
-            </div>
+        <div class="panel-header mb-4">
+          <h2 class="page-title mb-0" style="background: transparent">YD Ascend Projects Panel</h2>
+          <div class="panel-toolbar">
+            <a href="#" class="btn" title="Activity Log / Projects Overview"
+              aria-label="Open Activity Log and Projects Overview"
+              onclick="event.preventDefault(); Swal.fire('Activity Log', 'The Activity Log page lives on the live website and is not part of this offline prototype.', 'info');">
+              <i class="fa-solid fa-chart-bar"></i>Activity Log
+            </a>
+            <a href="#" class="btn" title="Show pending assemblies across all active projects"
+              onclick="event.preventDefault(); showDrawingsView();">
+              <i class="fa fa-clock"></i>Pending Drawings
+            </a>
+            <a href="#" class="btn" title="YDAstra — Execution Control (available after LOE upload)"
+              onclick="event.preventDefault(); showYDAstraView();">
+              <i class="fa fa-cogs"></i>YDAstra
+            </a>
+            <button class="btn btn-tb-primary" id="btnNewProject" data-bs-toggle="modal" data-bs-target="#createModal">
+              <i class="fa fa-plus"></i>Initiate New Project
+            </button>
+            <a href="ascend.html" target="_blank" class="btn btn-tb-accent">Current Projects</a>
+            <a href="#" class="btn btn-tb-icon" title="Configure Users" id="btnUserConfig">
+              <i class="fa fa-gear"></i>
+            </a>
           </div>
         </div>
         <div class="table-responsive">
@@ -1154,100 +1508,127 @@
               <div>
                 <h2>
                   <i class="fa fa-drafting-compass me-2"></i> Assembly Drawings
-                  <select id="drawingsProjectSelector" class="form-select form-select-sm d-inline-block w-auto ms-2" style="font-size: 16px; font-weight: normal; vertical-align: middle;" onchange="openProjectDrawings(this.value)">
+                  <select id="drawingsProjectSelector" class="form-select form-select-sm d-inline-block w-auto ms-2"
+                    style="font-size: 16px; font-weight: normal; vertical-align: middle;"
+                    onchange="openProjectDrawings(this.value)">
                   </select>
                 </h2>
                 <div class="meta" id="projectMeta">Loading project</div>
               </div>
               <div class="d-flex gap-2 align-items-center">
-                <button type="button" class="btn btn-primary btn-sm fw-bold" onclick="let currentProjId = $('#drawingsProjectSelector').val(); if(currentProjId) openExcelViewer(currentProjId);" title="Edit LOE values in interactive sheet editor">
+                <button type="button" class="btn btn-success btn-sm fw-bold" id="btnBulkUpload"
+                  onclick="document.getElementById('globalBOMUploadInput').click()"
+                  title="Bulk upload drawings / BOM Excel files — auto-mapped to assemblies by file name">
+                  <i class="fa fa-file-excel me-1"></i>Upload BOMs
+                </button>
+                <input type="file" id="globalBOMUploadInput" style="display: none;" accept=".xlsx, .xls, .pdf" multiple
+                  onchange="handleGlobalBOMUpload(this)">
+                <button type="button" class="btn btn-primary btn-sm fw-bold" id="btnEditExcel"
+                  onclick="let currentProjId = $('#drawingsProjectSelector').val(); if(currentProjId) openExcelViewer(currentProjId);"
+                  title="Edit the LOE values in an Excel-like editor">
                   <i class="fa fa-pen-to-square me-1"></i>Edit LOE
                 </button>
-                <button class="btn btn-success btn-sm fw-bold" onclick="document.getElementById('globalBOMUploadInput').click()">
-                  <i class="fa fa-file-excel me-1"></i> Upload BOMs
-                </button>
-                <input type="file" id="globalBOMUploadInput" style="display: none;" accept=".xlsx, .xls, .pdf" multiple onchange="handleGlobalBOMUpload(this)">
-                <button class="btn btn-outline-secondary btn-sm fw-bold" onclick="showDashboardView()">
-                  <i class="fa fa-arrow-left me-1"></i>Back to Kick-Off
-                </button>
+                <a href="#" class="btn btn-outline-secondary btn-sm fw-bold"
+                  onclick="event.preventDefault(); showDashboardView();">
+                  <i class="fa fa-arrow-left me-1"></i>Back to Projects
+                </a>
               </div>
             </div>
-            <div class="stats-strip bg-light border rounded p-3 mb-3 d-flex align-items-center gap-4 shadow-sm" id="statsStrip">
+            <div class="stats-strip" id="statsStrip">
               <div class="stat">
-                <span class="label text-muted small fw-bold d-block text-uppercase">Total Assemblies</span>
-                <span class="value fs-4 fw-bold text-dark" id="statTotal">0</span>
+                <span class="label">Total Assemblies</span>
+                <span class="value" id="statTotal"></span>
               </div>
               <div class="stat">
-                <span class="label text-muted small fw-bold d-block text-uppercase">Released</span>
-                <span class="value fs-4 fw-bold text-success" id="statReleased">0</span>
+                <span class="label">Released</span>
+                <span class="value text-success" id="statReleased"></span>
               </div>
               <div class="stat">
-                <span class="label text-muted small fw-bold d-block text-uppercase">Pending</span>
-                <span class="value fs-4 fw-bold text-warning" id="statPending">0</span>
+                <span class="label">Pending</span>
+                <span class="value text-warning" id="statPending"></span>
               </div>
             </div>
-
-            <!-- Filter Row with Search & Filters Dropdown -->
-            <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-              <div class="flex-grow-1" style="max-width: 380px;">
-                <input type="text" class="form-control form-control-sm" id="filterText" placeholder="Filter assemblies by name, doc no, section" />
-              </div>
-              
-              <!-- Filters Dropdown Button -->
-              <div class="dropdown">
-                <button class="btn btn-secondary btn-sm dropdown-toggle fw-bold" type="button" id="dropdownFiltersMenu" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                  <i class="fa fa-filter me-1"></i> Filters
-                </button>
-                <div class="dropdown-menu p-3 shadow" style="min-width: 230px; z-index: 1060;" aria-labelledby="dropdownFiltersMenu">
-                  <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="filterAllEquipments" checked onchange="toggleFilterOption('all')">
-                    <label class="form-check-label small fw-bold" for="filterAllEquipments">All Equipments</label>
-                  </div>
-                  <hr class="dropdown-divider my-2">
-                  <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="filterDrawingsUploaded" onchange="toggleFilterOption('drawingsUploaded')">
-                    <label class="form-check-label small" for="filterDrawingsUploaded">Drawings Uploaded</label>
-                  </div>
-                  <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="filterDrawingsNotUploaded" onchange="toggleFilterOption('drawingsNotUploaded')">
-                    <label class="form-check-label small" for="filterDrawingsNotUploaded">Drawings Not Uploaded</label>
-                  </div>
-                  <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="filterBOMUploaded" onchange="toggleFilterOption('bomUploaded')">
-                    <label class="form-check-label small" for="filterBOMUploaded">BOM Uploaded</label>
-                  </div>
-                  <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="filterBOMNotUploaded" onchange="toggleFilterOption('bomNotUploaded')">
-                    <label class="form-check-label small" for="filterBOMNotUploaded">BOM Not Uploaded</label>
+            <div class="filter-row">
+              <input type="text" class="form-control form-control-sm" id="filterText"
+                placeholder="Filter assemblies by name, doc no, section" />
+              <div class="d-flex align-items-center gap-2 mb-0">
+                <label class="form-label small mb-0">Show:</label>
+                <div class="dropdown" id="filterPendingOnly">
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                    data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="fa fa-filter me-1"></i>Filters
+                  </button>
+                  <div class="dropdown-menu py-1" style="min-width: 230px">
+                    <label class="dropdown-item d-flex align-items-center gap-2 mb-0"
+                      style="cursor: pointer; white-space: nowrap">
+                      <input class="form-check-input m-0 show-filter" type="checkbox" value="all"
+                        id="filterAllEquipments" checked onchange="toggleFilterOption('all')" />
+                      <span>All Equipments</span>
+                    </label>
+                    <div class="dropdown-divider my-1"></div>
+                    <label class="dropdown-item d-flex align-items-center gap-2 mb-0"
+                      style="cursor: pointer; white-space: nowrap">
+                      <input class="form-check-input m-0 show-filter" type="checkbox" value="uploaded"
+                        id="filterDrawingsUploaded" onchange="toggleFilterOption('drawingsUploaded')" />
+                      <span>Drawings Uploaded</span>
+                    </label>
+                    <label class="dropdown-item d-flex align-items-center gap-2 mb-0"
+                      style="cursor: pointer; white-space: nowrap">
+                      <input class="form-check-input m-0 show-filter" type="checkbox" value="pending"
+                        id="filterDrawingsNotUploaded" onchange="toggleFilterOption('drawingsNotUploaded')" />
+                      <span>Drawings Not Uploaded</span>
+                    </label>
+                    <label class="dropdown-item d-flex align-items-center gap-2 mb-0"
+                      style="cursor: pointer; white-space: nowrap">
+                      <input class="form-check-input m-0 show-filter" type="checkbox" value="bomUploaded"
+                        id="filterBOMUploaded" onchange="toggleFilterOption('bomUploaded')" />
+                      <span>BOM Uploaded</span>
+                    </label>
+                    <label class="dropdown-item d-flex align-items-center gap-2 mb-0"
+                      style="cursor: pointer; white-space: nowrap">
+                      <input class="form-check-input m-0 show-filter" type="checkbox" value="bomPending"
+                        id="filterBOMNotUploaded" onchange="toggleFilterOption('bomNotUploaded')" />
+                      <span>BOM Not Uploaded</span>
+                    </label>
                   </div>
                 </div>
               </div>
             </div>
 
-
-
             <div id="tableWrap" class="table-wrap">
               <div class="table-responsive">
-                <table class="table table-bordered table-hover assemblies mb-0 align-middle" id="assembliesTable" style="font-size: 0.88rem;">
-                  <thead class="sticky-top shadow-sm" style="background-color: #2b4964; color: white;">
-                    <tr id="assembliesHeaderRow" class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">
-                      <th class="sortable text-nowrap py-2" data-sort-key="srNo" onclick="toggleAssembliesSort('srNo')" style="width: 70px; cursor: pointer; color: white;"><span class="toggle-chevron text-white me-1" onclick="toggleAllAssemblies(event, this)"><i class="fa fa-chevron-right"></i></span>SR <i class="fa fa-sort opacity-50 ms-1"></i></th>
-                      <th class="sortable py-2" data-sort-key="assemblyName" onclick="toggleAssembliesSort('assemblyName')" style="min-width: 250px; cursor: pointer; color: white;">ASSEMBLY <i class="fa fa-sort opacity-50 ms-1"></i></th>
-                      <th class="sortable py-2" data-sort-key="drawingDocNo" onclick="toggleAssembliesSort('drawingDocNo')" style="width: 150px; cursor: pointer; color: white;">DOC NO <i class="fa fa-sort opacity-50 ms-1"></i></th>
-                      <th style="width: 60px; color: white;" class="text-center py-2">QTY</th>
-                      <th class="sortable text-center py-2" data-sort-key="releaseWeek" onclick="toggleAssembliesSort('releaseWeek')" style="width: 110px; cursor: pointer; color: white;">RELEASE WEEK <i class="fa fa-sort opacity-50 ms-1"></i></th>
-                      <th class="sortable text-center py-2" data-sort-key="status" onclick="toggleAssembliesSort('status')" style="width: 100px; cursor: pointer; color: white;">STATUS <i class="fa fa-sort opacity-50 ms-1"></i></th>
-                      <th style="width: 420px; color: white;" class="py-2">DRAWINGS AND BOM UPLOAD</th>
+                <table class="table table-bordered table-hover assemblies mb-0" id="assembliesTable">
+                  <thead>
+                    <tr id="assembliesHeaderRow">
+                      <th class="sortable" data-sort-key="srNo" style="width: 60px"
+                        onclick="toggleAssembliesSort('srNo')">SR</th>
+                      <th class="sortable" data-sort-key="assemblyName" onclick="toggleAssembliesSort('assemblyName')">
+                        Assembly</th>
+                      <th class="sortable" data-sort-key="drawingDocNo" onclick="toggleAssembliesSort('drawingDocNo')">
+                        Doc No</th>
+                      <th class="sortable" data-sort-key="qty" style="width: 70px"
+                        onclick="toggleAssembliesSort('qty')">Qty</th>
+                      <th class="sortable" data-sort-key="releaseWeek" onclick="toggleAssembliesSort('releaseWeek')">
+                        Release Week</th>
+                      <th class="sortable" data-sort-key="status" style="width: 110px"
+                        onclick="toggleAssembliesSort('status')">Status</th>
+                      <th class="upload-cell">Drawings and BOM upload</th>
                     </tr>
-                    <!-- Sub-Search Row -->
-                    <tr id="assembliesSearchRow" class="bg-white">
-                      <td class="p-1"><input type="text" id="colSearchSr" class="form-control form-control-sm text-center py-1 px-2" placeholder="SR" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1"><input type="text" id="colSearchAssembly" class="form-control form-control-sm py-1 px-2" placeholder="Assembly" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1"><input type="text" id="colSearchDocNo" class="form-control form-control-sm py-1 px-2" placeholder="Doc No" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1"><input type="text" disabled class="form-control form-control-sm text-center py-1 px-2 bg-light" placeholder="Qty" /></td>
-                      <td class="p-1"><input type="text" id="colSearchReleaseWeek" class="form-control form-control-sm text-center py-1 px-2" placeholder="Release Week" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1"><input type="text" id="colSearchStatus" class="form-control form-control-sm text-center py-1 px-2" placeholder="Status" onkeyup="renderAssemblies()" /></td>
-                      <td class="p-1"></td>
+                    <tr class="column-filter-row">
+                      <th><input type="text" id="colSearchSr" class="form-control form-control-sm column-filter"
+                          data-filter-key="srNo" placeholder="SR" onkeyup="renderAssemblies()" /></th>
+                      <th><input type="text" id="colSearchAssembly" class="form-control form-control-sm column-filter"
+                          data-filter-key="assemblyName" placeholder="Assembly" onkeyup="renderAssemblies()" /></th>
+                      <th><input type="text" id="colSearchDocNo" class="form-control form-control-sm column-filter"
+                          data-filter-key="drawingDocNo" placeholder="Doc No" onkeyup="renderAssemblies()" /></th>
+                      <th><input type="text" id="colSearchQty" class="form-control form-control-sm column-filter"
+                          data-filter-key="qty" placeholder="Qty" onkeyup="renderAssemblies()" /></th>
+                      <th><input type="text" id="colSearchReleaseWeek"
+                          class="form-control form-control-sm column-filter" data-filter-key="releaseWeek"
+                          placeholder="Release Week" onkeyup="renderAssemblies()" /></th>
+                      <th><input type="text" id="colSearchStatus" class="form-control form-control-sm column-filter"
+                          data-filter-key="status" placeholder="Status" onkeyup="renderAssemblies()" /></th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody id="assembliesBody"></tbody>
@@ -1260,18 +1641,21 @@
     </div>
 
     <!-- ======================================================= -->
-    <!-- YDCOMPLAN EXECUTION MODULE — New views, additive only   -->
+    <!-- YDASTRA EXECUTION MODULE — New views, additive only   -->
     <!-- ======================================================= -->
 
-    <!-- YDComplan Project Summary (Main View) -->
+    <!-- YDAstra Project Summary (Main View) -->
     <div id="ydcProjectSummary" style="display:none;">
       <div class="container-fluid px-4 pb-5">
         <div class="content-card">
           <div class="page-title-bar d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
             <div>
               <h2>
-                <span id="ydcProjTitle"><i class="fa fa-project-diagram me-2"></i>YD Complan panel (YD Component Planning)</span>
-                <select id="ydcProjectSelector" class="form-select form-select-sm d-inline-block w-auto ms-2" style="font-size: 16px; font-weight: normal; vertical-align: middle;" onchange="showYDComplanView(this.value)">
+                <span id="ydcProjTitle"><i class="fa fa-project-diagram me-2"></i>YD Astra panel (YD Component
+                  Planning)</span>
+                <select id="ydcProjectSelector" class="form-select form-select-sm d-inline-block w-auto ms-2"
+                  style="font-size: 16px; font-weight: normal; vertical-align: middle;"
+                  onchange="showYDAstraView(this.value)">
                 </select>
               </h2>
               <div class="meta" id="ydcProjMeta"></div>
@@ -1287,7 +1671,8 @@
             <div class="col-12 d-flex justify-content-end">
               <div class="input-group input-group-sm" style="max-width: 250px;">
                 <span class="input-group-text bg-light border-end-0"><i class="fa fa-search text-muted"></i></span>
-                <input type="text" id="ydcSearchInput" class="form-control border-start-0" placeholder="Search assemblies..." onkeyup="filterYdcTable()">
+                <input type="text" id="ydcSearchInput" class="form-control border-start-0"
+                  placeholder="Search assemblies..." onkeyup="filterYdcTable()">
               </div>
             </div>
           </div>
@@ -1299,12 +1684,12 @@
       </div>
     </div>
 
-    <!-- YDComplan View 3: Assembly Detail + Workflow Stages -->
+    <!-- YDAstra View 3: Assembly Detail + Workflow Stages -->
     <div id="ydcAssemblyView" style="display:none;">
       <div class="container-fluid px-4 pb-5">
         <div class="content-card">
           <div class="ydc-breadcrumb mb-1">
-            <span class="ydc-link" onclick="showYDComplanView()"><i class="fa fa-cogs me-1"></i>YDComplan</span>
+            <span class="ydc-link" onclick="showYDAstraView()"><i class="fa fa-cogs me-1"></i>YDAstra</span>
             <i class="fa fa-chevron-right mx-2" style="font-size:0.65rem;color:#9ca3af;"></i>
             <span class="ydc-link" id="ydcAsmBreadProject" onclick="ydcBackToProjects()">Project</span>
             <i class="fa fa-chevron-right mx-2" style="font-size:0.65rem;color:#9ca3af;"></i>
@@ -1330,7 +1715,7 @@
     </div>
 
     <!-- ======================================================= -->
-    <!-- END YDCOMPLAN HTML                                       -->
+    <!-- END YDASTRA HTML                                       -->
     <!-- ======================================================= -->
 
   </main>
@@ -1372,7 +1757,8 @@
                 <input type="text" class="form-control" id="inpSpeed" required placeholder="1200" />
               </div>
               <div class="col-md-6">
-                <label class="form-label">Thickness (mm) <span class="text-danger" id="thicknessReqMark">*</span></label>
+                <label class="form-label">Thickness (mm) <span class="text-danger"
+                    id="thicknessReqMark">*</span></label>
                 <input type="text" class="form-control" id="inpThickness" required placeholder="3" />
               </div>
               <div class="col-md-6">
@@ -1583,7 +1969,9 @@
                   <th style="width: 100px;">SR. NO.</th>
                   <th>Assembly Name</th>
                   <th style="width: 160px;">Drawing/Doc No.</th>
-                  <th style="width: 180px; cursor: pointer;" id="thScheduleDispatchWeek" onclick="toggleScheduleSort('dispatchWeek')">Dispatch Week <i class="fa fa-sort text-muted opacity-50 ms-1" style="font-size: 0.75rem;"></i></th>
+                  <th style="width: 180px; cursor: pointer;" id="thScheduleDispatchWeek"
+                    onclick="toggleScheduleSort('dispatchWeek')">Dispatch Week <i
+                      class="fa fa-sort text-muted opacity-50 ms-1" style="font-size: 0.75rem;"></i></th>
                   <th style="width: 200px;">Billing Value INR</th>
                 </tr>
               </thead>
@@ -1619,9 +2007,13 @@
                 <th style="width: 80px" class="text-center">SR. NO.</th>
                 <th>Assembly Name</th>
                 <th>Drawing/Doc No.</th>
-                <th style="width: 150px; cursor: pointer;" id="thDatesDispatchWeek" onclick="toggleDatesSort('dispatchWeek')">Dispatch Week <i class="fa fa-sort text-muted opacity-50 ms-1" style="font-size: 0.75rem;"></i></th>
+                <th style="width: 150px; cursor: pointer;" id="thDatesDispatchWeek"
+                  onclick="toggleDatesSort('dispatchWeek')">Dispatch Week <i
+                    class="fa fa-sort text-muted opacity-50 ms-1" style="font-size: 0.75rem;"></i></th>
                 <th style="width: 150px">Billing Value INR</th>
-                <th style="width: 180px; cursor: pointer;" id="thDatesReleaseWeek" onclick="toggleDatesSort('releaseWeek')">Drawing Release Week <i class="fa fa-sort text-muted opacity-50 ms-1" style="font-size: 0.75rem;"></i></th>
+                <th style="width: 180px; cursor: pointer;" id="thDatesReleaseWeek"
+                  onclick="toggleDatesSort('releaseWeek')">Drawing Release Week <i
+                    class="fa fa-sort text-muted opacity-50 ms-1" style="font-size: 0.75rem;"></i></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -1701,7 +2093,7 @@
     </div>
   </div>
 
-  <!-- YD Complan Assembly Details Modal -->
+  <!-- YD Astra Assembly Details Modal -->
   <div class="modal fade" id="ydcAssemblyDetailsModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content shadow-lg">
@@ -1720,7 +2112,8 @@
           </div>
           <!-- History Log -->
           <h6 class="fw-bold mb-2"><i class="fa fa-history text-secondary me-2"></i>Execution History</h6>
-          <ul class="list-group list-group-flush small" id="ydcAssemblyHistoryList" style="max-height: 200px; overflow-y: auto;">
+          <ul class="list-group list-group-flush small" id="ydcAssemblyHistoryList"
+            style="max-height: 200px; overflow-y: auto;">
             <!-- History items injected by JS -->
           </ul>
         </div>
@@ -1732,7 +2125,8 @@
   </div>
 
   <!-- Custom Context Menu for BOM to SAP Table -->
-  <div id="ydcContextMenu" class="dropdown-menu shadow bg-white border border-secondary" style="display: none; position: absolute; z-index: 2000;">
+  <div id="ydcContextMenu" class="dropdown-menu shadow bg-white border border-secondary"
+    style="display: none; position: absolute; z-index: 2000;">
     <!-- Items dynamically inserted by JS -->
   </div>
 
@@ -1745,41 +2139,41 @@
         </div>
         <div class="modal-body">
           <div id="projectStepper" class="stepper-wrapper">
-            <div class="stepper-item completed">
-              <div class="step-counter"><i class="fa fa-check"></i></div>
+            <div class="stepper-item">
+              <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
               <div class="step-name">Sales</div>
             </div>
-            <div class="stepper-item completed">
-              <div class="step-counter"><i class="fa fa-check"></i></div>
-              <div class="step-name">Design<br />(Proj No)</div>
-            </div>
-            <div class="stepper-item completed">
-              <div class="step-counter"><i class="fa fa-check"></i></div>
-              <div class="step-name">Director<br />(Advance)</div>
-            </div>
-            <div class="stepper-item completed">
-              <div class="step-counter"><i class="fa fa-check"></i></div>
-              <div class="step-name">Finance<br />(Advance)</div>
-            </div>
-            <div class="stepper-item active">
-              <div class="step-counter"><i class="fa fa-spinner fa-spin"></i></div>
-              <div class="step-name">COO/VP<br />(PM)</div>
+            <div class="stepper-item">
+              <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
+              <div class="step-name">Design</div>
             </div>
             <div class="stepper-item">
               <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
-              <div class="step-name">PM<br />(Kickoff)</div>
+              <div class="step-name">Dir</div>
             </div>
             <div class="stepper-item">
               <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
-              <div class="step-name">Design<br />(LOE)</div>
+              <div class="step-name">Fin</div>
             </div>
             <div class="stepper-item">
               <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
-              <div class="step-name">Planning<br />(Schedule)</div>
+              <div class="step-name">VP</div>
             </div>
             <div class="stepper-item">
               <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
-              <div class="step-name">Design<br />(Dates)</div>
+              <div class="step-name">KickOff</div>
+            </div>
+            <div class="stepper-item">
+              <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
+              <div class="step-name">LOE</div>
+            </div>
+            <div class="stepper-item">
+              <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
+              <div class="step-name">Plan</div>
+            </div>
+            <div class="stepper-item">
+              <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
+              <div class="step-name">Release Week</div>
             </div>
             <div class="stepper-item">
               <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
@@ -1787,7 +2181,11 @@
             </div>
             <div class="stepper-item">
               <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
-              <div class="step-name">Dir Appr</div>
+              <div class="step-name">Dir. Appr</div>
+            </div>
+            <div class="stepper-item">
+              <div class="step-counter"><i class="fa fa-circle-notch opacity-25"></i></div>
+              <div class="step-name">Drawings</div>
             </div>
           </div>
           <div class="mb-3 p-3 bg-light rounded border">
@@ -1808,11 +2206,14 @@
               <div class="col-12 mt-3 pt-3 border-top" id="detRemarksContainer">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <strong class="text-dark"><i class="fa fa-comments text-primary me-1"></i> Remarks</strong>
-                  <button type="button" class="btn btn-sm btn-outline-secondary py-0" id="btnToggleRemarks" style="font-size: 12px;">Hide Remarks (0)</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary py-0" id="btnToggleRemarks"
+                    style="font-size: 12px;">Hide Remarks (0)</button>
                 </div>
                 <div class="input-group input-group-sm mb-3">
-                  <input type="text" class="form-control" id="inpNewRemark" placeholder="Add a remark for this project..." />
-                  <button class="btn btn-primary" type="button" id="btnAddRemark"><i class="fa fa-plus me-1"></i>Add</button>
+                  <input type="text" class="form-control" id="inpNewRemark"
+                    placeholder="Add a remark for this project..." />
+                  <button class="btn btn-primary" type="button" id="btnAddRemark"><i
+                      class="fa fa-plus me-1"></i>Add</button>
                 </div>
                 <div id="detRemarksList"></div>
               </div>
@@ -1837,26 +2238,31 @@
         <div class="modal-body">
           <form id="replaceDocsForm">
             <div class="mb-3">
-              <label class="form-label fw-bold"><i class="fa fa-file-pdf text-danger me-1"></i>Replace Technical Scope (PDF)</label>
+              <label class="form-label fw-bold"><i class="fa fa-file-pdf text-danger me-1"></i>Replace Technical Scope
+                (PDF)</label>
               <input type="file" class="form-control form-control-sm" id="repTechScope" accept=".pdf" />
             </div>
             <div class="mb-3">
-              <label class="form-label fw-bold"><i class="fa fa-file-pdf text-success me-1"></i>Replace Purchase Order</label>
+              <label class="form-label fw-bold"><i class="fa fa-file-pdf text-success me-1"></i>Replace Purchase
+                Order</label>
               <input type="file" class="form-control form-control-sm" id="repPO" accept=".pdf,image/*" />
             </div>
             <div class="mb-3 pt-2 border-top">
-              <label class="form-label fw-bold text-primary"><i class="fa fa-file-invoice-dollar me-1"></i>Upload / Replace Advance Receipt</label>
+              <label class="form-label fw-bold text-primary"><i class="fa fa-file-invoice-dollar me-1"></i>Upload /
+                Replace Advance Receipt</label>
               <input type="file" class="form-control form-control-sm" id="repAdvReceipt" accept=".pdf,image/*" />
             </div>
             <div class="mb-3">
               <label class="form-label fw-bold">Advance Amount</label>
-              <input type="text" class="form-control form-control-sm" id="repAdvAmount" placeholder="e.g. ₹5,00,000 / $10,000" />
+              <input type="text" class="form-control form-control-sm" id="repAdvAmount"
+                placeholder="e.g. ₹5,00,000 / $10,000" />
             </div>
           </form>
         </div>
         <div class="modal-footer bg-light">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary btn-sm" onclick="saveReplacedDocs()"><i class="fa fa-floppy-disk me-1"></i>Save Documents</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveReplacedDocs()"><i
+              class="fa fa-floppy-disk me-1"></i>Save Documents</button>
         </div>
       </div>
     </div>
@@ -1867,23 +2273,30 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content shadow">
         <div class="modal-header bg-light d-flex justify-content-between align-items-center py-2">
-          <h5 class="modal-title mb-0 fs-6 fw-bold text-dark"><i class="fa fa-file-excel text-success me-2"></i> LOE Document Manager & Equipment List</h5>
+          <h5 class="modal-title mb-0 fs-6 fw-bold text-dark"><i class="fa fa-file-excel text-success me-2"></i> LOE
+            Document Manager & Equipment List</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="p-2 bg-light border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
           <div class="d-flex align-items-center gap-2 flex-wrap">
-            <select id="excelViewerSheetFilter" class="form-select form-select-sm" style="width: auto; max-width: 220px;"></select>
-            <input type="text" id="excelViewerSearch" class="form-control form-control-sm" placeholder="🔍 Search equipment or drawing..." style="width: 240px;" />
+            <select id="excelViewerSheetFilter" class="form-select form-select-sm"
+              style="width: auto; max-width: 220px;"></select>
+            <input type="text" id="excelViewerSearch" class="form-control form-control-sm"
+              placeholder="🔍 Search equipment or drawing..." style="width: 240px;" />
           </div>
           <div class="d-flex align-items-center gap-2 flex-wrap">
-            <button type="button" class="btn btn-sm btn-outline-success fw-bold" onclick="addLoeEquipmentRow()"><i class="fa fa-plus me-1"></i> Add Equipment</button>
-            <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="$('#inpReplaceLoeFile').click()"><i class="fa fa-file-upload me-1"></i> Replace Excel File</button>
-            <button type="button" class="btn btn-sm btn-success fw-bold" onclick="saveLoeTableEdits()"><i class="fa fa-save me-1"></i> Save Changes</button>
+            <button type="button" class="btn btn-sm btn-outline-success fw-bold" onclick="addLoeEquipmentRow()"><i
+                class="fa fa-plus me-1"></i> Add Equipment</button>
+            <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="$('#inpReplaceLoeFile').click()"><i
+                class="fa fa-file-upload me-1"></i> Replace Excel File</button>
+            <button type="button" class="btn btn-sm btn-success fw-bold" onclick="saveLoeTableEdits()"><i
+                class="fa fa-save me-1"></i> Save Changes</button>
             <input type="file" id="inpReplaceLoeFile" accept=".xls,.xlsx" style="display: none;" />
           </div>
         </div>
         <div class="modal-body p-0" style="max-height: 65vh; overflow-y: auto;">
-          <table class="table table-sm table-bordered table-hover mb-0" id="excelViewerTable" style="font-size: 0.88rem;">
+          <table class="table table-sm table-bordered table-hover mb-0" id="excelViewerTable"
+            style="font-size: 0.88rem;">
             <thead class="table-light sticky-top shadow-sm" style="z-index: 5;">
               <tr>
                 <th style="width: 45px" class="text-center">#</th>
@@ -1904,7 +2317,8 @@
         </div>
         <div class="modal-footer bg-light d-flex justify-content-between py-2">
           <div>
-            <button class="btn btn-outline-secondary btn-sm" id="btnDownloadLoeOrigin"><i class="fa fa-download me-1"></i> Download Original .xls</button>
+            <button class="btn btn-outline-secondary btn-sm" id="btnDownloadLoeOrigin"><i
+                class="fa fa-download me-1"></i> Download Original .xls</button>
           </div>
           <div>
             <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
@@ -1948,7 +2362,7 @@
         </div>
       </div>
     </div>
-    <div class="container copyright text-center mt-3 border-top pt-3">
+    <div class="container copyright text-center">
       <p>© <span>Copyright</span> <strong class="px-1 sitename">YOGIJI DIGI</strong></p>
     </div>
   </footer>
@@ -1983,9 +2397,11 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body p-3 bg-light">
-          <p class="text-muted small mb-3">Review the mapped assemblies for each file. You can change the mapping dropdown if a file name does not match the drawing/doc number.</p>
+          <p class="text-muted small mb-3">Review the mapped assemblies for each file. You can change the mapping
+            dropdown if a file name does not match the drawing/doc number.</p>
           <div class="table-responsive">
-            <table class="table table-sm table-hover table-bordered bg-white align-middle" id="bulkUploadMappingTable" style="font-size: 0.85rem;">
+            <table class="table table-sm table-hover table-bordered bg-white align-middle" id="bulkUploadMappingTable"
+              style="font-size: 0.85rem;">
               <thead class="table-dark">
                 <tr>
                   <th>File Name</th>
@@ -2002,7 +2418,8 @@
         </div>
         <div class="modal-footer bg-light border-top">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-success btn-sm fw-bold" onclick="submitBulkUploadMapping()"><i class="fa fa-check-circle me-1"></i>Confirm & Submit Upload</button>
+          <button type="button" class="btn btn-success btn-sm fw-bold" onclick="submitBulkUploadMapping()"><i
+              class="fa fa-check-circle me-1"></i>Confirm & Submit Upload</button>
         </div>
       </div>
     </div>
@@ -2023,9 +2440,13 @@
               <span class="text-muted small" id="subTitleProject">Project No</span>
             </div>
             <div class="d-flex align-items-center">
-              <button class="btn btn-success btn-sm" id="btnAddSubtaskRow"><i class="fa fa-plus me-1"></i> Add Row</button>
-              <button class="btn btn-primary btn-sm ms-2" onclick="document.getElementById('subtasksExcelFile').click()"><i class="fa fa-file-excel me-1"></i> Upload Excel</button>
-              <input type="file" id="subtasksExcelFile" style="display: none;" accept=".xlsx, .xls" onchange="handleSubtasksExcel(this)">
+              <button class="btn btn-success btn-sm" id="btnAddSubtaskRow"><i class="fa fa-plus me-1"></i> Add
+                Row</button>
+              <button class="btn btn-primary btn-sm ms-2"
+                onclick="document.getElementById('subtasksExcelFile').click()"><i class="fa fa-file-excel me-1"></i>
+                Upload Excel</button>
+              <input type="file" id="subtasksExcelFile" style="display: none;" accept=".xlsx, .xls"
+                onchange="handleSubtasksExcel(this)">
             </div>
           </div>
           <div class="table-responsive">
@@ -2106,7 +2527,7 @@
           PENDING_KICKOFF: { cls: "bg-stage-4", label: "Pending Kick-Off" },
           PENDING_DESIGN_LOE: { cls: "bg-info text-dark", label: "Design: Upload LOE" },
           PENDING_PLANNING_COLUMNS: { cls: "bg-warning text-dark", label: "Dispatch Schedule" },
-          PENDING_DESIGN_RELEASE_WEEK: { cls: "bg-primary", label: "Design: Fill Plan Week" },
+          PENDING_DESIGN_RELEASE_WEEK: { cls: "bg-primary", label: "Design: Fill Release Week" },
           PENDING_VP_APPROVAL: { cls: "bg-warning text-dark", label: "VP Approval" },
           PENDING_DIRECTOR_APPROVAL: { cls: "bg-danger", label: "Director Approval Pending" },
           ACTIVE: { cls: "bg-stage-5", label: "Active: Drawings Upload" },
@@ -2714,10 +3135,10 @@
         }
       };
 
-      window.triggerQuickDocUpload = function(projId, field) {
+      window.triggerQuickDocUpload = function (projId, field) {
         let proj = getProject(projId);
         if (!proj) return;
-        
+
         let input = document.getElementById('quickDocUploadInput');
         if (!input) {
           input = document.createElement('input');
@@ -2726,13 +3147,13 @@
           input.className = 'd-none';
           document.body.appendChild(input);
         }
-        
+
         input.accept = field === 'techScopeUrl' ? '.pdf' : '.pdf,image/*';
         input.value = '';
-        input.onchange = async function(e) {
+        input.onchange = async function (e) {
           let file = e.target.files[0];
           if (!file) return;
-          
+
           let dataUrl = await fileToDataUrl(file);
           if (field === 'techScopeUrl') {
             proj.techScopeUrl = dataUrl;
@@ -2754,11 +3175,11 @@
               proj.timeline[3] = new Date().toLocaleDateString();
             }
           }
-          
+
           if (typeof saveProjects === 'function') await saveProjects();
           if (typeof showDetails === 'function') showDetails(proj.id);
           if (typeof renderTable === 'function') renderTable();
-          
+
           let title = field === 'techScopeUrl' ? 'Technical Scope' : (field === 'poUrl' ? 'Purchase Order' : 'Advance Receipt');
           if (window.Swal) {
             Swal.fire({
@@ -2846,8 +3267,8 @@
             var rowStr = row.map(c => String(c).toUpperCase()).join(' ');
 
             if (c0 === 'SR.' || c0 === 'SR' || c0 === 'SR. NO.' || c0 === 'SR NO' ||
-                c1 === 'SR.' || c1 === 'SR' || c1 === 'SR. NO.' || c1 === 'SR NO' ||
-                rowStr.includes('GA/ASSEMBLY') || (rowStr.includes('SR') && rowStr.includes('DRAWING'))) {
+              c1 === 'SR.' || c1 === 'SR' || c1 === 'SR. NO.' || c1 === 'SR NO' ||
+              rowStr.includes('GA/ASSEMBLY') || (rowStr.includes('SR') && rowStr.includes('DRAWING'))) {
               headerRowIdx = r;
               break;
             }
@@ -3094,15 +3515,15 @@
               dispatchWeek: newItem.dispatchWeek || matchedOldItem.dispatchWeek || '',
               billingValue: newItem.billingValue || matchedOldItem.billingValue || '',
               releaseWeek: newItem.releaseWeek || matchedOldItem.releaseWeek || '',
-              drawingFiles: (matchedOldItem.drawingFiles && matchedOldItem.drawingFiles.length > 0) 
-                              ? matchedOldItem.drawingFiles 
-                              : (newItem.drawingFiles || []),
-              subtasks: (matchedOldItem.subtasks && matchedOldItem.subtasks.length > 0) 
-                          ? matchedOldItem.subtasks 
-                          : (newItem.subtasks || []),
-              designStatus: (matchedOldItem.designStatus && matchedOldItem.designStatus !== 'Pending') 
-                              ? matchedOldItem.designStatus 
-                              : (newItem.designStatus || 'Pending'),
+              drawingFiles: (matchedOldItem.drawingFiles && matchedOldItem.drawingFiles.length > 0)
+                ? matchedOldItem.drawingFiles
+                : (newItem.drawingFiles || []),
+              subtasks: (matchedOldItem.subtasks && matchedOldItem.subtasks.length > 0)
+                ? matchedOldItem.subtasks
+                : (newItem.subtasks || []),
+              designStatus: (matchedOldItem.designStatus && matchedOldItem.designStatus !== 'Pending')
+                ? matchedOldItem.designStatus
+                : (newItem.designStatus || 'Pending'),
               remark: matchedOldItem.remark || newItem.remark || ''
             };
           }
@@ -3370,40 +3791,66 @@
         order: [[3, "asc"]],
       });
 
+      // SLA pill for the Status column — same rule as calculateSLA() on the
+      // live kickOff.html: "Active" once the project is running, otherwise
+      // days since the last stage change against a 7-day limit (15 days
+      // while Finance is collecting the advance).
+      function calculateSLA(p) {
+        if (p.stage === 10) return { color: "badge-sla-green", text: "Active" };
+        let now = new Date();
+        let last = null;
+        let consider = (v) => {
+          let d = new Date(v);
+          if (isNaN(d) || d - now > 86400000) return;
+          if (!last || d > last) last = d;
+        };
+        Object.values(p.timeline || {}).forEach(consider);
+        if (!last && p.initiatedOn) consider(p.initiatedOn);
+        if (!last && typeof p.id === 'number' && p.id > 1e12) last = new Date(p.id);
+        if (!last) return { color: "badge-sla-green", text: "On Track" };
+        let days = (now - last) / (1000 * 60 * 60 * 24);
+        let limit = (p.stage === 3) ? 15 : 7;
+        if (days > limit) return { color: "badge-sla-red", text: "Escalated" };
+        if (days > limit * 0.7) return { color: "badge-sla-amber", text: "Due Soon" };
+        return { color: "badge-sla-green", text: "On Track" };
+      }
+
       function renderTable() {
         dt.clear();
         projectsData.forEach(p => {
           let stageKey = CONSTANTS.STAGE_MAP[p.stage];
           let stageConfig = CONSTANTS.STATUS_CONFIG[stageKey] || { cls: "bg-secondary", label: "Unknown" };
+          let sla = calculateSLA(p);
 
-          let actionBtn = "";
-          if (p.stage === 1) actionBtn = `<button class="btn btn-sm btn-primary fw-bold text-white btn-allocate-proj" data-id="${p.id}"><i class="fa fa-arrow-right me-1"></i>Next</button>`;
-          else if (p.stage === 1.5) actionBtn = `<button class="btn btn-sm btn-warning fw-bold text-dark btn-electrical" data-id="${p.id}"><i class="fa fa-bolt me-1"></i>Electrical</button>`;
-          else if (p.stage === 2) actionBtn = `<button class="btn btn-sm btn-warning fw-bold text-dark btn-dir-decision" data-id="${p.id}"><i class="fa fa-clock me-1"></i>Dir Decision</button>`;
-          else if (p.stage === 3) actionBtn = `<button class="btn btn-sm btn-warning fw-bold text-dark btn-finance-advance" data-id="${p.id}"><i class="fa fa-money-bill me-1"></i>Advance</button>`;
-          else if (p.stage === 4) actionBtn = `<button class="btn btn-sm btn-primary fw-bold text-white btn-allocate-pm" data-id="${p.id}"><i class="fa fa-user me-1"></i>Allocate PM</button>`;
-          else if (p.stage === 5) actionBtn = `<button class="btn btn-sm btn-info fw-bold text-dark btn-kickoff" data-id="${p.id}"><i class="fa fa-users me-1"></i>Kickoff</button>`;
-          else if (p.stage === 6) actionBtn = `<button class="btn btn-sm btn-primary fw-bold text-white btn-loe" data-id="${p.id}"><i class="fa fa-file-alt me-1"></i>LOE</button>`;
-          else if (p.stage === 7) actionBtn = `<button class="btn btn-sm btn-warning fw-bold text-dark btn-schedule" data-id="${p.id}"><i class="fa fa-calendar me-1"></i>Schedule</button>`;
-          else if (p.stage === 8) actionBtn = `<button class="btn btn-sm btn-info fw-bold text-dark btn-dates" data-id="${p.id}"><i class="fa fa-calendar-check me-1"></i>Dates</button>`;
-          else if (p.stage === 8.5) actionBtn = `<button class="btn btn-sm btn-warning fw-bold text-dark btn-vp-approve" data-id="${p.id}"><i class="fa fa-check me-1"></i>VP Appr</button>`;
-          else if (p.stage === 9) actionBtn = `<button class="btn btn-sm btn-danger fw-bold text-white btn-dir-approve" data-id="${p.id}"><i class="fa fa-check-double me-1"></i>Dir Appr</button>`;
-          else if (p.stage === 10) actionBtn = `<button class="btn btn-sm btn-success fw-bold text-white" data-id="${p.id}" onclick="showDrawingsView('${p.id}')"><i class="fa fa-drafting-compass me-1"></i>Drawings</button>`;
+          // Button labels / colours follow getActionBtn() on the live kickOff.html.
+          // The btn-* hook classes are what the existing click handlers bind to.
+          let actionBtn = `<button class="btn btn-sm btn-outline-secondary disabled" disabled style="font-size: 12px; padding: 4px 8px;"><i class="fa fa-lock"></i>Locked</button>`;
+          if (p.stage === 1) actionBtn = `<button class="btn btn-sm text-white btn-allocate-proj" style="background-color:#6c757d" data-id="${p.id}">Enter Project No.</button>`;
+          else if (p.stage === 1.5) actionBtn = `<button class="btn btn-sm text-white btn-electrical" style="background-color:#fd7e14" data-id="${p.id}">Enter Project No.</button>`;
+          else if (p.stage === 2) actionBtn = `<button class="btn btn-sm btn-warning fw-bold btn-dir-decision" data-id="${p.id}">Take Decision</button>`;
+          else if (p.stage === 3) actionBtn = `<button class="btn btn-sm btn-info text-white btn-finance-advance" data-id="${p.id}">Record Receipt</button>`;
+          else if (p.stage === 4) actionBtn = `<button class="btn btn-sm btn-primary btn-allocate-pm" data-id="${p.id}">Assign PM</button>`;
+          else if (p.stage === 5) actionBtn = `<button class="btn btn-sm btn-info text-white fw-bold btn-kickoff" data-id="${p.id}"><i class="fa fa-users me-1"></i>Kick-Off</button>`;
+          else if (p.stage === 6) actionBtn = `<button class="btn btn-sm btn-info text-light fw-bold btn-loe" data-id="${p.id}"><i class="fa fa-upload me-1"></i>Upload LOE</button>`;
+          else if (p.stage === 7) actionBtn = `<button class="btn btn-sm btn-warning text-light fw-bold btn-schedule" data-id="${p.id}">Add Plan</button>`;
+          else if (p.stage === 8) actionBtn = `<button class="btn btn-sm btn-primary text-light fw-bold btn-dates" data-id="${p.id}"><i class="fa fa-calendar-week me-1"></i>Fill Release Week</button>`;
+          else if (p.stage === 8.5) actionBtn = `<button class="btn btn-sm btn-warning fw-bold btn-vp-approve" data-id="${p.id}">VP Approval</button>`;
+          else if (p.stage === 9) actionBtn = `<button class="btn btn-sm btn-danger fw-bold btn-dir-approve" data-id="${p.id}">Final Approval</button>`;
+          else if (p.stage === 10) actionBtn = `<a class="btn btn-sm btn-success fw-bold text-white" href="#" data-id="${p.id}" onclick="event.preventDefault();event.stopPropagation();showDrawingsView('${p.id}')" title="View / manage assembly drawings"><i class="fa fa-drafting-compass me-1"></i>Drawings</a>`;
 
-          let drawingsBtn = (p.stage >= 8 && p.stage < 10) ? `<button class="btn btn-sm btn-success fw-bold text-white ms-1" data-id="${p.id}" onclick="event.stopPropagation();showDrawingsView('${p.id}')" title="Open Drawings Page"><i class="fa fa-drafting-compass me-1"></i>Drawings</button>` : '';
-          let ydcBtn = (p.stage >= 7) ? `<button class="btn btn-sm btn-outline-success fw-bold act-mini ms-1" data-id="${p.id}" onclick="event.stopPropagation();showYDComplanView(${p.id})" title="Open in YDComplan Execution"><i class="fa fa-cogs me-1"></i>YDComplan</button>` : '';
-          let deleteBtn = `<button class="btn btn-sm btn-danger btn-delete-proj ms-1" data-id="${p.id}" title="Delete Project"><i class="fa fa-trash"></i></button>`;
+          let ydcBtn = (p.stage >= 7) ? `<button class="btn btn-sm btn-outline-success fw-bold act-mini" data-id="${p.id}" onclick="event.stopPropagation();showYDAstraView(${p.id})" title="Open in YDAstra Execution"><i class="fa fa-cogs me-1"></i>YDAstra</button>` : '';
+          let deleteBtn = `<button type="button" class="btn btn-sm btn-outline-danger btn-delete-proj" data-id="${p.id}" title="Delete project"><i class="fa fa-trash"></i></button>`;
 
           let rowHtml = `
             <tr data-id="${p.id}">
-              <td><span class="badge rounded-pill ${p.status === 'New' ? 'badge-sla-green' : 'bg-secondary'}" style="min-width: 60px">${p.status}</span></td>
-              <td><span class="fw-bold">${p.projNo}</span></td>
-              <td><div>${p.client}</div><div class="small text-muted">${p.site}</div></td>
+              <td class="text-center"><span class="badge rounded-pill ${sla.color}" style="min-width: 60px">${sla.text}</span></td>
+              <td class="fw-bold"><span class="fw-bold">${p.projNo}</span></td>
+              <td><div>${p.client}</div><div class="small text-muted"><i class="fa fa-map-marker-alt me-1"></i>${p.site || ''}</div></td>
               <td><div>${p.machine}</div></td>
               <td><span class="badge status-badge ${stageConfig.cls}">${stageConfig.label}</span></td>
               <td><div class="fw-bold small">${p.owner}</div></td>
-              <td><div class="${p.pm === 'Pending' ? 'text-muted fst-italic' : 'fw-bold'}">${p.pm}</div></td>
-              <td><div class="action-cell d-flex align-items-center flex-nowrap">${actionBtn}${drawingsBtn}${ydcBtn}${deleteBtn}</div></td>
+              <td><div class="fw-bold">${(p.pm || '').trim() || 'Pending'}</div></td>
+              <td><div class="action-cell d-flex align-items-center gap-2 flex-nowrap">${actionBtn}${ydcBtn}${deleteBtn}</div></td>
             </tr>
           `;
           dt.row.add($(rowHtml));
@@ -3438,6 +3885,7 @@
       // Show Details Modal on row click
       $('#kickoffTable tbody').on('click', 'tr', function (e) {
         if ($(e.target).closest("button").length) return;
+        if ($(e.target).closest("a").length) return;
 
         let id = $(this).data('id') || $(this).find('button[data-id]').data('id') || $(this).find('button').data('id');
         let proj = getProject(id);
@@ -3499,31 +3947,32 @@
           { elem: 7, s: 7 },
           { elem: 8, s: 8 },
           { elem: 9, s: 8.5 },
-          { elem: 10, s: 9 }
+          { elem: 10, s: 9 },
+          { elem: 11, s: 10 }
         ];
 
         let stepperItems = $('#projectStepper .stepper-item');
-        stepperItems.removeClass('completed active').find('.step-counter').html('<i class="fa fa-circle-notch opacity-25"></i>');
+        stepperItems.removeClass('completed active skipped opacity-50').removeAttr('title').find('.step-counter').removeAttr('style').html('<i class="fa fa-circle-notch opacity-25"></i>');
 
         stepMapping.forEach(step => {
           let item = stepperItems.eq(step.elem);
+          let label = item.find('.step-name').text().replace(/\s+/g, ' ').trim();
           let isSkippedFinance = (step.s === 3 && proj.bypassedAdvance);
+          let isDone = s > step.s || (step.s === 3 && (proj.hasAdvanceReceipt || proj.advanceReceiptUrl || proj.advReceiptUrl));
+          let isCurrent = s === step.s || (s === 1.5 && step.s === 1);
 
-          // Show date on hover if available
-          let dateStr = tl[step.s] ? `\n(Completed: ${tl[step.s]})` : "";
-          if (isSkippedFinance) dateStr = "\n(Bypassed)";
-          let titleText = item.find('.step-name').text().replace('\n', ' ') + dateStr;
-          item.attr('title', titleText);
-
+          // Same states / icons / hover text as the live kickOff.html stepper.
           if (isSkippedFinance) {
-            item.addClass('completed opacity-50');
-            item.find('.step-counter').html('<i class="fa fa-share text-secondary"></i>').css({ 'background': '#e9ecef', 'border-color': '#dee2e6' });
-          } else if (s > step.s || s === 10 || (step.s === 3 && (proj.hasAdvanceReceipt || proj.advanceReceiptUrl || proj.advReceiptUrl))) {
-            item.addClass('completed').find('.step-counter').html('<i class="fa fa-check"></i>').removeAttr('style');
-          } else if (s === step.s || (s === 1.5 && step.s === 1)) {
-            item.addClass('active').find('.step-counter').html('<i class="fa fa-spinner fa-spin"></i>').removeAttr('style');
+            item.addClass('skipped').attr('title', `${label} — skipped (not required)`);
+            item.find('.step-counter').html('<i class="fa fa-minus"></i>');
+          } else if (isDone) {
+            item.addClass('completed').attr('title', tl[step.s] ? `${label} — completed on ${tl[step.s]}` : `${label} — completed (date not recorded)`);
+            item.find('.step-counter').html('<i class="fa fa-check"></i>');
+          } else if (isCurrent) {
+            item.addClass('active').attr('title', `${label} — in progress`);
+            item.find('.step-counter').html('<i class="fa fa-spinner fa-spin"></i>');
           } else {
-            item.find('.step-counter').html('<i class="fa fa-circle-notch opacity-25"></i>').removeAttr('style');
+            item.attr('title', `${label} — not started yet`);
           }
         });
 
@@ -4025,10 +4474,10 @@
       let datesSortKey = null;
       let datesSortAsc = true;
 
-      window.toggleScheduleSort = function(key) {
+      window.toggleScheduleSort = function (key) {
         var proj = getProject(currentProjectId);
         if (!proj || !proj.loeData) return;
-        
+
         // Save current input values first
         $('.dispatch-input').each(function () {
           var idx = $(this).data('idx');
@@ -4050,7 +4499,7 @@
         renderScheduleModalRows(proj);
       };
 
-      window.toggleDatesSort = function(key) {
+      window.toggleDatesSort = function (key) {
         var proj = getProject(currentProjectId);
         if (!proj || !proj.loeData) return;
 
@@ -4294,6 +4743,8 @@
     window.showDrawingsView = function (projId) {
       $('#dashboardView').hide();
       $('#drawingsView').fadeIn();
+      $('.main').addClass('drawings-mode');
+      $('#navYdAscend').show();
 
       let pData = window.projectsData || (typeof projectsData !== 'undefined' ? projectsData : []);
       let activeProjects = pData.filter(p => p.stage >= 8);
@@ -4324,6 +4775,8 @@
     window.showDashboardView = function () {
       $('#drawingsView').hide();
       $('#dashboardView').fadeIn();
+      $('.main').removeClass('drawings-mode');
+      $('#navYdAscend').hide();
       renderTable();
     };
 
@@ -4355,7 +4808,7 @@
           let origSr = String(loeRow.srNo || loeRow.autoId || '').trim();
           let isSec = loeRow.isSection || false;
           let genSr = origSr;
-          
+
           if (!isSec && origSr && !origSr.startsWith('BO')) {
             if (origSr.includes('.') && !origSr.endsWith('.0')) {
               if (globalParentCount > 0) {
@@ -4378,7 +4831,9 @@
             generatedSr: genSr,
             isSection: isSec,
             assemblyName: loeRow.assemblyName,
+            section: loeRow.section || '',
             drawingDocNo: loeRow.drawingNo,
+            qty: loeRow.qty || '',
             dispatchWeek: loeRow.dispatchWeek || '-',
             releaseWeek: loeRow.releaseWeek || '-',
             subtasks: loeRow.subtasks || [],
@@ -4480,7 +4935,7 @@
       });
     };
 
-    window.toggleAllAssemblies = function(e, iconEl) {
+    window.toggleAllAssemblies = function (e, iconEl) {
       e.stopPropagation();
       iconEl.classList.toggle('open');
       const isExpanded = iconEl.classList.contains('open');
@@ -4495,14 +4950,32 @@
       });
     };
 
-    window.toggleFilterOption = function(type) {
+    window.toggleFilterOption = function (type) {
+      // Same rules as the live drawings.html "Show" menu: ticking "All"
+      // clears the rest; ticking a specific filter clears "All" and its
+      // opposite in the pair; nothing ticked falls back to "All".
+      const opposite = {
+        drawingsUploaded: '#filterDrawingsNotUploaded',
+        drawingsNotUploaded: '#filterDrawingsUploaded',
+        bomUploaded: '#filterBOMNotUploaded',
+        bomNotUploaded: '#filterBOMUploaded'
+      };
+      const ids = {
+        drawingsUploaded: '#filterDrawingsUploaded',
+        drawingsNotUploaded: '#filterDrawingsNotUploaded',
+        bomUploaded: '#filterBOMUploaded',
+        bomNotUploaded: '#filterBOMNotUploaded'
+      };
       if (type === 'all') {
-        let isChecked = $('#filterAllEquipments').is(':checked');
-        if (isChecked) {
+        if ($('#filterAllEquipments').is(':checked')) {
           $('#filterDrawingsUploaded, #filterDrawingsNotUploaded, #filterBOMUploaded, #filterBOMNotUploaded').prop('checked', false);
         }
-      } else {
+      } else if (ids[type] && $(ids[type]).is(':checked')) {
         $('#filterAllEquipments').prop('checked', false);
+        if (opposite[type]) $(opposite[type]).prop('checked', false);
+      }
+      if (!$('#filterPendingOnly .show-filter:checked').length) {
+        $('#filterAllEquipments').prop('checked', true);
       }
       renderAssemblies();
     };
@@ -4518,114 +4991,76 @@
     };
 
     window.rowHtml = function (a, opts) {
+      // Markup mirrors rowHtml() on the live drawings.html: same cells,
+      // classes, badges and the single "Drawings & BOM" upload card.
       if (a.isSection) {
-        return `
-          <tr class="section-divider">
-            <td colspan="7" class="bg-dark text-white fw-bold py-2 px-3">${escapeHtml(a.assemblyName)}</td>
-          </tr>
-        `;
+        return `<tr class="section-divider"><td colspan="7">${escapeHtml(a.assemblyName)}</td></tr>`;
       }
 
-      const sr = String(a.generatedSr || a.srNo || "");
-      const isTrueChild = sr.includes('.') && !sr.endsWith('.0');
-      
-      let rowClasses = "";
-      if (opts.isParent) {
-        rowClasses = "parent-row bg-light sr-whole-row";
-      } else if (isTrueChild) {
-        rowClasses = `child-row child-of-${opts.parentKey}${opts.startOpen ? "" : " d-none"}`;
-      } else {
-        rowClasses = "standalone-row bg-white";
+      const sr = String(a.generatedSr || a.srNo || "").trim();
+      const displaySr = /^\d+\.0$/.test(sr) ? sr.slice(0, -2) : sr;
+      const wholeCls = /^\d+$/.test(displaySr) ? " sr-whole-row" : "";
+      const isTrueChild = !opts.isParent && sr.includes('.') && !sr.endsWith('.0');
+      const rowClasses = (isTrueChild
+        ? `child-row child-of-${opts.parentKey}${opts.startOpen ? "" : " d-none"}`
+        : "parent-row") + wholeCls;
+
+      const chevron = isTrueChild ? "" : (opts.isParent && opts.hasChildren
+        ? `<span class="toggle-chevron${opts.startOpen ? " open" : ""}" onclick="toggleChildren('${opts.parentKey}', this)"><i class="fa fa-chevron-right"></i></span>`
+        : `<span class="toggle-chevron invisible"><i class="fa fa-chevron-right"></i></span>`);
+
+      // Parent-only aggregate of its direct sub-assemblies.
+      let childAgg = null;
+      if (opts.isParent && opts.hasChildren) {
+        const baseKey = sr.split('.')[0];
+        const children = (allAssemblies || []).filter(x => !x.isSection && x !== a
+          && String(x.generatedSr || x.srNo || '').trim().startsWith(baseKey + '.')
+          && !String(x.generatedSr || x.srNo || '').trim().endsWith('.0'));
+        childAgg = {
+          total: children.length,
+          drawingUploaded: children.filter(c => (c.drawingFiles || []).length > 0).length,
+          bomUploaded: children.filter(c => (c.subtasks || []).length > 0).length
+        };
       }
-
-      const chevron = opts.isParent && opts.hasChildren
-        ? `<span class="toggle-chevron${opts.startOpen ? " open" : ""} position-absolute start-0 ms-2 text-dark cursor-pointer" onclick="toggleChildren('${opts.parentKey}', this)"><i class="fa fa-chevron-right"></i></span>`
-        : "";
-
-      if (opts.isParent) {
-        let srStr = String(a.generatedSr || a.srNo || '').trim();
-        let baseKey = srStr.split('.')[0];
-        let list = allAssemblies || [];
-        let children = list.filter(x => !x.isSection && String(x.generatedSr || x.srNo || '').trim().startsWith(baseKey + '.') && !String(x.generatedSr || x.srNo || '').trim().endsWith('.0'));
-        let totalChild = children.length;
-        let dwgChild = children.filter(c => (c.drawingFiles || []).length > 0).length;
-        let bomChild = children.filter(c => (c.subtasks || []).length > 0).length;
-
-        let displaySr = String(sr || '').endsWith('.0') && /^\d+\.0$/.test(String(sr || '')) ? String(sr).slice(0, -2) : sr;
-
-        let statusBadge = (dwgChild === totalChild && totalChild > 0)
-          ? `<span class="badge bg-success"><i class="fa fa-circle-check me-1"></i>Released</span>`
-          : `<span class="badge bg-secondary opacity-75">Pending</span>`;
-
-        return `
-          <tr class="${rowClasses}" data-assembly-id="${a._id}">
-            <td class="fw-bold text-center py-1 position-relative">${chevron}<span title="Excel Sheet SR: ${escapeHtml(a.srNo || '')}">${escapeHtml(displaySr)}</span></td>
-            <td class="py-1"><strong class="text-dark fs-6">${escapeHtml(a.assemblyName || "")}</strong></td>
-            <td class="py-1"><code class="small fw-bold" style="color: #d63384; font-family: monospace; font-size: 0.85rem;">${escapeHtml(a.drawingDocNo || "-")}</code></td>
-            <td class="text-center fw-bold text-secondary py-1">${escapeHtml(a.qty || "")}</td>
-            <td class="text-center py-1">${getWeekColorBadge(a.releaseWeek)}</td>
-            <td class="text-center py-1">${statusBadge}</td>
-            <td class="py-1">
-              <div class="up-sec up-sec-files p-1 px-2 border rounded" style="background-color: #f4f6f9;">
-                <div class="up-sec-title fw-bold mb-1 text-uppercase" style="color: #3b5266; font-size: 0.8rem; letter-spacing: 0.5px;"><i class="fa fa-folder text-secondary me-2"></i>DRAWINGS &amp; BOM</div>
-                <div class="d-flex gap-2 flex-wrap">
-                  <span class="badge ${dwgChild === 0 ? 'bg-transparent border text-secondary' : dwgChild === totalChild ? 'bg-success text-white' : 'bg-warning text-dark'} py-1 px-2 rounded-2 fw-bold" style="font-size: 0.75rem;"><i class="fa fa-drafting-compass me-1 opacity-75"></i>${dwgChild}/${totalChild} Drawings Uploaded</span>
-                  <span class="badge ${bomChild === 0 ? 'bg-transparent border text-secondary' : bomChild === totalChild ? 'bg-success text-white' : 'bg-warning text-dark'} py-1 px-2 rounded-2 fw-bold" style="font-size: 0.75rem;"><i class="fa fa-file-excel me-1 opacity-75"></i>${bomChild}/${totalChild} BOM Uploaded</span>
-                </div>
-              </div>
-            </td>
-          </tr>
-        `;
-      }
-
+      const isAggRow = !!(childAgg && childAgg.total);
       const drawingCount = (a.drawingFiles || []).length;
-      const subtasksCount = (a.subtasks || []).length;
-      const isReleased = drawingCount > 0;
-      let statusBadge = isReleased
-        ? `<span class="badge bg-success"><i class="fa fa-check-circle me-1"></i>Released</span>`
-        : `<span class="badge bg-light text-muted border">Pending</span>`;
+      const bomCount = (a.subtasks || []).length;
 
-      let sectionSubtext = a.section ? `<div class="small text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">${escapeHtml(a.section)}</div>` : '';
+      // Status: Released when this row has a drawing, or (parent) when ANY
+      // sub-assembly has one; otherwise a muted Pending.
+      const isReleasedStatus = isAggRow ? childAgg.drawingUploaded > 0 : drawingCount > 0;
+      const statusHtml = isReleasedStatus
+        ? '<span class="badge bg-success"><i class="fa fa-circle-check me-1"></i>Released</span>'
+        : '<span class="badge badge-soft-muted">Pending</span>';
 
-      return `
-        <tr class="${rowClasses}" data-assembly-id="${a._id}">
-          <td class="text-center text-muted fw-bold py-1"><span title="Excel Sheet SR: ${escapeHtml(a.srNo || '')}">${escapeHtml(sr)}</span></td>
-          <td class="py-1">
-            <div class="fw-bold text-dark">${escapeHtml(a.assemblyName || "")}</div>
-            ${sectionSubtext}
-          </td>
-          <td class="py-1">
-            <code class="small fw-bold" style="color: #d63384; font-family: monospace; font-size: 0.85rem;">${escapeHtml(a.drawingDocNo || "-")}</code>
-          </td>
-          <td class="text-center fw-bold text-secondary py-1">${escapeHtml(a.qty || "1")}</td>
-          <td class="text-center py-1">${getWeekColorBadge(a.releaseWeek)}</td>
-          <td class="text-center py-1">${statusBadge}</td>
-          <td class="py-1">
-            <div class="p-1 border rounded bg-white" style="display: inline-block; min-width: 280px;">
-              <div class="d-flex gap-1 mb-1">
-                <button type="button" class="btn btn-sm ${drawingCount > 0 ? 'btn-primary text-white' : 'btn-outline-primary'} flex-grow-1" style="font-size: 0.75rem;" onclick="openDrawingsModal('${a._id}')">
-                  <i class="fa fa-eye me-1"></i>Drawings (${drawingCount})
-                </button>
-                <button type="button" class="btn btn-sm ${subtasksCount > 0 ? 'btn-success text-white' : 'btn-outline-success'} flex-grow-1" style="font-size: 0.75rem;" onclick="openSubtasksModal('${a.projId}', ${a.loeIdx})">
-                  <i class="fa fa-eye me-1"></i>BOM (${subtasksCount})
-                </button>
-              </div>
-              <div class="input-group input-group-sm">
-                <input type="file" multiple accept=".pdf,.xlsx,.xls,.csv" class="form-control" id="drawingInput_${a._id}" style="font-size: 0.75rem;">
-                <button type="button" class="btn fw-bold text-white px-3" style="background-color: #3b5266; font-size: 0.8rem;" onclick="uploadAssemblyDrawing('${a.projId}', ${a.loeIdx}, '${a._id}')">
-                  <i class="fa fa-upload me-1"></i>Upload
-                </button>
-              </div>
-            </div>
-          </td>
-        </tr>
-      `;
+      // nothing uploaded -> muted grey, partial -> yellow, complete -> green
+      const aggCls = (n, total) => n === 0 ? 'badge-soft-muted' : (n >= total ? 'bg-success' : 'bg-warning text-dark');
+      const uploadSectionHtml = isAggRow
+        ? `<span class="badge ${aggCls(childAgg.drawingUploaded, childAgg.total)}" title="Direct sub-assemblies with a drawing uploaded"><i class="fa fa-drafting-compass me-1"></i>${childAgg.drawingUploaded >= childAgg.total ? 'Drawing Released' : `${childAgg.drawingUploaded}/${childAgg.total} Drawings Uploaded`}</span> `
+        + `<span class="badge ${aggCls(childAgg.bomUploaded, childAgg.total)}" title="Direct sub-assemblies with a BOM uploaded"><i class="fa fa-file-excel me-1"></i>${childAgg.bomUploaded >= childAgg.total ? 'BOM Uploaded' : `${childAgg.bomUploaded}/${childAgg.total} BOM Uploaded`}</span>`
+        : `<div class="d-flex gap-1 mb-1">`
+        + `<button type="button" class="btn btn-sm btn-view-compact flex-fill ${drawingCount ? 'btn-primary' : 'btn-outline-primary'}" onclick="openDrawingsModal('${a._id}')"${drawingCount ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>Drawings (${drawingCount})</button>`
+        + `<button type="button" class="btn btn-sm btn-view-compact flex-fill ${bomCount ? 'btn-success' : 'btn-outline-success'}" onclick="openSubtasksModal('${a.projId}', ${a.loeIdx})" title="${bomCount ? 'View / edit BOM components' : 'No BOM uploaded yet — open to add components manually'}"><i class="fa fa-eye me-1"></i>BOM (${bomCount})</button>`
+        + `</div><div class="input-group input-group-sm">`
+        + `<input type="file" multiple accept=".pdf,.xlsx,.xls,.csv" class="form-control form-control-sm" id="drawingInput_${a._id}" title="Excel files are filed as BOMs; everything else as drawings">`
+        + `<button type="button" class="btn btn-primary" onclick="uploadAssemblyDrawing('${a.projId}', ${a.loeIdx}, '${a._id}')"><i class="fa fa-upload me-1"></i>Upload</button>`
+        + `</div>`;
+
+      return `<tr class="${rowClasses}" data-assembly-id="${a._id}">`
+        + `<td>${chevron}<span title="Excel Sheet SR: ${escapeHtml(a.srNo || '')}">${escapeHtml(displaySr)}</span></td>`
+        + `<td><div class="fw-semibold">${escapeHtml(a.assemblyName || "")}</div><div class="text-muted small">${escapeHtml(a.section || "")}</div></td>`
+        + `<td><code class="small">${escapeHtml(a.drawingDocNo || "")}</code></td>`
+        + `<td>${escapeHtml(a.qty || "")}</td>`
+        + `<td>${escapeHtml(a.releaseWeek || "")}</td>`
+        + `<td>${statusHtml}</td>`
+        + `<td class="upload-cell"><div class="up-sec up-sec-files">${isAggRow ? '<div class="up-sec-title"><i class="fa fa-folder-open me-1"></i>Drawings &amp; BOM</div>' : ''}${uploadSectionHtml}</div></td>`
+        + `</tr>`;
     };
 
     let assembliesSortKey = null;
     let assembliesSortAsc = true;
 
-    window.toggleAssembliesSort = function(key) {
+    window.toggleAssembliesSort = function (key) {
       if (assembliesSortKey === key) {
         assembliesSortAsc = !assembliesSortAsc;
       } else {
@@ -4633,6 +5068,14 @@
         assembliesSortAsc = true;
       }
       renderAssemblies();
+    };
+
+    // Header arrows (CSS ::after on th.sortable) — same as the live page.
+    window.updateSortIndicators = function () {
+      document.querySelectorAll('#assembliesTable th.sortable').forEach(th => {
+        th.classList.toggle('sort-asc', th.dataset.sortKey === assembliesSortKey && assembliesSortAsc);
+        th.classList.toggle('sort-desc', th.dataset.sortKey === assembliesSortKey && !assembliesSortAsc);
+      });
     };
 
     window.renderAssemblies = function () {
@@ -4643,6 +5086,7 @@
       const colDoc = ($('#colSearchDocNo').val() || '').trim().toLowerCase();
       const colRel = ($('#colSearchReleaseWeek').val() || '').trim().toLowerCase();
       const colStat = ($('#colSearchStatus').val() || '').trim().toLowerCase();
+      const colQty = ($('#colSearchQty').val() || '').trim().toLowerCase();
 
       const fDrawUp = $('#filterDrawingsUploaded').is(':checked');
       const fDrawNotUp = $('#filterDrawingsNotUploaded').is(':checked');
@@ -4663,6 +5107,7 @@
         if (colSr && !String(a.generatedSr || a.srNo || '').toLowerCase().includes(colSr)) return false;
         if (colAsm && !String(a.assemblyName || '').toLowerCase().includes(colAsm)) return false;
         if (colDoc && !String(a.drawingDocNo || '').toLowerCase().includes(colDoc)) return false;
+        if (colQty && !String(a.qty || '').toLowerCase().includes(colQty)) return false;
         if (colRel && !String(a.releaseWeek || '').toLowerCase().includes(colRel)) return false;
         if (colStat) {
           let statText = isDwgUp ? 'released' : 'pending';
@@ -4682,6 +5127,12 @@
           if (assembliesSortKey === 'releaseWeek') {
             valA = parseWeekValue(valA);
             valB = parseWeekValue(valB);
+          } else if (assembliesSortKey === 'status') {
+            valA = (a.drawingFiles || []).length > 0 ? 1 : 0;
+            valB = (b.drawingFiles || []).length > 0 ? 1 : 0;
+          } else if (assembliesSortKey === 'qty') {
+            valA = parseFloat(valA) || 0;
+            valB = parseFloat(valB) || 0;
           } else if (assembliesSortKey === 'drawingCount') {
             valA = (a.drawingFiles || []).length;
             valB = (b.drawingFiles || []).length;
@@ -4706,6 +5157,7 @@
       document.getElementById("statPending").textContent = total - released;
 
       const tbody = document.getElementById("assembliesBody");
+      updateSortIndicators();
       if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">No assemblies found.</td></tr>`;
         return;
@@ -5164,18 +5616,18 @@
           let normDwg = normalizeDwgNo(loe.drawingNo);
           let normName = normalizeDwgNo(loe.assemblyName);
           return (normDwg && (normDwg === normBase || normDwg.includes(normBase) || normBase.includes(normDwg))) ||
-                 (normName && (normName === normBase || normName.includes(normBase) || normBase.includes(normName)));
+            (normName && (normName === normBase || normName.includes(normBase) || normBase.includes(normName)));
         });
 
         let fileTypeBadge = isExcel ? '<span class="badge bg-success">BOM Excel</span>' : '<span class="badge bg-primary">Drawing PDF</span>';
         let rowOptionsHtml = `<option value="-1">-- Select Assembly (Ignore file) --</option>`;
         proj.loeData.forEach((loe, idx) => {
           let selected = idx === matchedLoeIdx ? 'selected' : '';
-          rowOptionsHtml += `<option value="${idx}" ${selected}>[${loe.srNo || (idx+1)}] ${escapeHtml(loe.assemblyName)} (${escapeHtml(loe.drawingNo || 'No Doc')})</option>`;
+          rowOptionsHtml += `<option value="${idx}" ${selected}>[${loe.srNo || (idx + 1)}] ${escapeHtml(loe.assemblyName)} (${escapeHtml(loe.drawingNo || 'No Doc')})</option>`;
         });
 
-        let statusBadge = matchedLoeIdx !== -1 
-          ? '<span class="badge bg-success"><i class="fa fa-check me-1"></i>Auto-Matched</span>' 
+        let statusBadge = matchedLoeIdx !== -1
+          ? '<span class="badge bg-success"><i class="fa fa-check me-1"></i>Auto-Matched</span>'
           : '<span class="badge bg-warning text-dark"><i class="fa fa-exclamation-triangle me-1"></i>Unmapped</span>';
 
         tbodyHtml += `
@@ -5281,7 +5733,7 @@
                     proj.loeData[loeIdx].drawingNo = firstDwg;
                   }
                 }
-                
+
                 if (proj.execution && proj.execution.assemblies) {
                   proj.execution.assemblies = proj.execution.assemblies.filter(x => x.loeIdx !== loeIdx);
                 }
@@ -5388,7 +5840,7 @@
     });
 
     // Replace / Upload Documents Logic
-    window.openReplaceDocsModal = function() {
+    window.openReplaceDocsModal = function () {
       let pData = window.projectsData || [];
       let proj = pData.find(p => p.id == currentDetailId);
       if (!proj) return;
@@ -5396,10 +5848,10 @@
       $('#repPO').val('');
       $('#repAdvReceipt').val('');
       $('#repAdvAmount').val(proj.advAmount || '');
-      try { $('#replaceDocsModal').modal('show'); } catch(e) {}
+      try { $('#replaceDocsModal').modal('show'); } catch (e) { }
     };
 
-    window.saveReplacedDocs = async function() {
+    window.saveReplacedDocs = async function () {
       let pData = window.projectsData || [];
       let proj = pData.find(p => p.id == currentDetailId);
       if (!proj) return;
@@ -5437,7 +5889,7 @@
 
       let saveFn = window.saveProjects || null;
       if (saveFn) await saveFn();
-      try { $('#replaceDocsModal').modal('hide'); } catch(e) {}
+      try { $('#replaceDocsModal').modal('hide'); } catch (e) { }
       if (window.showDetails) window.showDetails(currentDetailId);
       if (window.renderTable) window.renderTable();
       if (window.Swal) window.Swal.fire({ icon: 'success', title: 'Documents Updated', text: 'Project documents and/or advance receipt updated successfully.', timer: 1500, showConfirmButton: false });
@@ -5445,6 +5897,16 @@
 
     // Event Listeners for Drawings View
     document.getElementById('filterText')?.addEventListener('keyup', renderAssemblies);
+
+    // Live drawings.html: clicking anywhere on a parent row (except a
+    // button / input / link / the chevron itself) expands or collapses it.
+    document.getElementById('assembliesBody')?.addEventListener('click', (e) => {
+      if (e.target.closest('button, a, input, select, textarea, label, .toggle-chevron')) return;
+      const row = e.target.closest('tr.parent-row');
+      if (!row) return;
+      const chevron = row.querySelector('.toggle-chevron:not(.invisible)');
+      if (chevron) chevron.click();
+    });
     document.getElementById('filterPendingOnly')?.addEventListener('change', renderAssemblies);
 
     // Subtasks Bulk Paste Logic
@@ -5484,7 +5946,7 @@
       }
     });
 
-    // YDComplan BOM-to-SAP Bulk Paste Logic
+    // YDAstra BOM-to-SAP Bulk Paste Logic
     $(document).on('paste', '.ydc-paste-target', function (e) {
       var clipboardData = e.originalEvent.clipboardData || window.clipboardData;
       var pastedData = clipboardData.getData('Text');
@@ -5526,7 +5988,7 @@
     });
 
     // ================================================================
-    // YDCOMPLAN EXECUTION MODULE
+    // YDASTRA EXECUTION MODULE
     // Additive only. All new functions. Zero existing code modified.
     // ================================================================
     (function (w) {
@@ -5582,7 +6044,7 @@
       }
 
       function hideAllYDC() {
-        $('#ydComplanView').hide();
+        $('#ydAstraView').hide();
         $('#ydcProjectSummary').hide();
         $('#ydcAssemblyView').hide();
       }
@@ -5641,16 +6103,18 @@
       }
 
       // ================================================================
-      // VIEW 1: YDComplan Projects List
+      // VIEW 1: YDAstra Projects List
       // ================================================================
-      w.showYDComplanView = function (projId) {
+      w.showYDAstraView = function (projId) {
         $('#dashboardView').hide();
         $('#drawingsView').hide();
+        $('.main').addClass('drawings-mode');
+        $('#navYdAscend').show();
         hideAllYDC();
 
         let eligs = pData().filter(isEligible);
-        
-        // Populate YDComplan project dropdown
+
+        // Populate YDAstra project dropdown
         let selectorHtml = '';
         eligs.forEach(p => {
           selectorHtml += `<option value="${p.id}">${p.projNo || 'TBD'} - ${escapeHtml(p.client || 'N/A')}</option>`;
@@ -5664,16 +6128,16 @@
 
         if (targetProjId) {
           $('#ydcProjectSelector').val(targetProjId);
-          w.openYDComplanProject(targetProjId);
+          w.openYDAstraProject(targetProjId);
         } else {
           $('#ydcProjectSummary').fadeIn(200);
-          document.getElementById('ydcProjTitle').innerHTML = '<i class="fa fa-project-diagram me-2"></i> YDComplan';
+          document.getElementById('ydcProjTitle').innerHTML = '<i class="fa fa-project-diagram me-2"></i> YDAstra';
           document.getElementById('ydcProjMeta').innerHTML = '<span class="text-danger">No active projects found with LOE uploaded (Stage >= 7)</span>';
           document.getElementById('ydcAssemblyGrid').innerHTML = '';
         }
       };
 
-      w.openYDComplanProject = function (projId) {
+      w.openYDAstraProject = function (projId) {
         let proj = getP(projId);
         if (!proj) return;
         w._ydcState.projId = projId;
@@ -5684,7 +6148,7 @@
         $('#ydcProjectSummary').fadeIn(200);
 
         document.getElementById('ydcProjTitle').innerHTML =
-          '<i class="fa fa-project-diagram me-2"></i> YD Complan panel (YD Component Planning)';
+          '<i class="fa fa-project-diagram me-2"></i> YD Astra panel (YD Component Planning)';
         document.getElementById('ydcProjMeta').innerHTML =
           '<strong>Project Number:</strong> ' + esc(proj.projNo || 'TBD') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
           '<strong>Client:</strong> ' + esc(proj.client || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
@@ -5714,11 +6178,11 @@
       };
 
       w.ydcBackToProjects = function () {
-        if (w._ydcState.projId != null) w.openYDComplanProject(w._ydcState.projId);
-        else w.showYDComplanView();
+        if (w._ydcState.projId != null) w.openYDAstraProject(w._ydcState.projId);
+        else w.showYDAstraView();
       };
 
-      w.openYDComplanAssemblyDetailsModal = function (projId, loeIdx) {
+      w.openYDAstraAssemblyDetailsModal = function (projId, loeIdx) {
         let proj = getP(projId);
         if (!proj) return;
         let lr = proj.loeData && proj.loeData[loeIdx];
@@ -5732,7 +6196,7 @@
         `);
 
         let a = proj.execution && proj.execution.assemblies.find(x => x.loeIdx === loeIdx);
-        
+
         let stepperHtml = '';
         YDC_STAGES.forEach((s, idx) => {
           let ss = a ? stageStatus(a, s.key) : 'pending';
@@ -5745,7 +6209,7 @@
             statusCls = 'active';
             icon = '<i class="fa fa-spinner fa-spin"></i>';
           }
-          
+
           let label = s.label;
           if (s.key === 'sap') label = 'SAP processing';
 
@@ -5762,7 +6226,7 @@
         if (history.length === 0) {
           historyHtml = '<li class="list-group-item text-muted text-center py-3">No history events logged yet.</li>';
         } else {
-          history.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+          history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
           history.forEach(h => {
             let dtStr = new Date(h.timestamp).toLocaleString();
             historyHtml += `
@@ -5933,12 +6397,12 @@
           let sr = String(lr.srNo || (idx + 1)).trim();
           let isChild = sr.includes('.');
           let parentPrefix = sr.split('.')[0];
-          
+
           let srStyle = isChild ? 'color: #6f42c1; font-weight: 500;' : 'color: #d9534f; font-weight: 500;';
 
           if (isChild) {
             html += `
-              <tr class="ydc-sub-row child-row ydc-child-of-${parentPrefix.replace(/[^a-zA-Z0-9]/g, '')}" onclick="openYDComplanAssemblyDetailsModal('${proj.id}', ${idx})" style="cursor: pointer; transition: background-color 0.15s; display: none;" title="Click to open details & progress history for ${esc(lr.assemblyName || '')}">
+              <tr class="ydc-sub-row child-row ydc-child-of-${parentPrefix.replace(/[^a-zA-Z0-9]/g, '')}" onclick="openYDAstraAssemblyDetailsModal('${proj.id}', ${idx})" style="cursor: pointer; transition: background-color 0.15s; display: none;" title="Click to open details & progress history for ${esc(lr.assemblyName || '')}">
                 <td class="text-center"><span style="${srStyle}">${esc(sr)}</span></td>
                 <td>
                   <div class="d-flex align-items-center text-secondary fw-normal">
@@ -5956,7 +6420,7 @@
                   <small class="text-muted" style="font-size: 0.7rem;">${done} / ${total} components (${pct}%)</small>
                 </td>
                 <td class="text-center">
-                  <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="event.stopPropagation(); openYDComplanAssembly('${proj.id}', ${idx})" style="padding: 1px 8px; font-size: 0.75rem;">
+                  <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="event.stopPropagation(); openYDAstraAssembly('${proj.id}', ${idx})" style="padding: 1px 8px; font-size: 0.75rem;">
                     Work <i class="fa fa-arrow-right ms-1"></i>
                   </button>
                 </td>
@@ -5992,7 +6456,7 @@
       // ================================================================
       // VIEW 3: Assembly Detail + Workflow
       // ================================================================
-      w.openYDComplanAssembly = function (projId, loeIdx) {
+      w.openYDAstraAssembly = function (projId, loeIdx) {
         let proj = getP(projId);
         if (!proj) return;
         w._ydcState.projId = projId;
@@ -6019,12 +6483,222 @@
         renderAssemblyExcelTable(proj, loeIdx);
       };
 
-      function getYSCode(drawingNo) {
+      // ================================================================
+      // STANDARD-PART AUTO-MAPPER (components without a drawing number)
+      // ----------------------------------------------------------------
+      // Drawing-based parts get YS codes (YS + drawing no, see below).
+      // Bought-out standard parts (bolts, nuts, washers, gaskets, ...)
+      // must instead use the existing SAP material code, whose format is
+      // family + spec, e.g.  FSBT08M12L40G2 = HEXAGON HEAD BOLT- M12X40MM ,G-10.9
+      // The rules below were reverse-engineered from the SAP item master
+      // dump (July 2026) and reproduce the master's code + description
+      // format exactly, so the PM gets a ready code and the SAP team
+      // only has to confirm. Anything the rules cannot recognise is left
+      // blank for the PM to look up in the item code dump manually.
+      // ================================================================
+      const YDC_STD = (function () {
+        const GRADE_TEXT = { G1: 'G-8.8', G2: 'G-10.9', G3: 'G-12.9', G4: 'SS-304', G5: 'SS-316', G6: 'SS-310' };
+        const DEFAULT_GRADE = 'G2'; // master's most common bolt grade (10.9); flagged as "assumed"
+        // IS 2016 plain washer hole size -> bolt size (M)
+        const WASHER_HOLE_TO_M = { '4.3': 4, '4.5': 4, '5.3': 5, '5.5': 5, '6.4': 6, '6.6': 6, '7': 6, '8.4': 8, '9': 8, '10.5': 10, '11': 10, '13': 12, '13.5': 12, '14': 12, '15': 14, '17': 16, '18': 16, '19': 18, '20': 18, '21': 20, '22': 20, '23': 22, '24': 22, '25': 24, '26': 24, '28': 27, '30': 27, '31': 30, '33': 30, '34': 33, '36': 33, '37': 36, '39': 36, '40': 39, '42': 39, '43': 42, '45': 42, '46': 45, '48': 45, '50': 48, '52': 48, '54': 52, '56': 52 };
+        // Bearing lock nut KM number for thread size (IS 6731 / DIN 981)
+        const KM = { 10: '00', 12: '01', 15: '02', 17: '03', 20: '04', 25: '05', 30: '06', 35: '07', 40: '08', 45: '09', 50: '10', 55: '11', 60: '12', 65: '13', 70: '14', 75: '15', 80: '16', 85: '17', 90: '18', 95: '19', 100: '20', 105: '21', 110: '22', 115: '23', 120: '24', 125: '25', 130: '26', 135: '27', 140: '28', 145: '29', 150: '30', 155: '31', 160: '32', 165: '33', 170: '34', 180: '36', 190: '38', 200: '40' };
+        // Master writes some DN sizes as "D50" and others as "DN65" in gasket codes
+        const GASKET_DN_STYLE = { 10: 'DN', 15: 'DN', 20: 'DN', 25: 'D', 32: 'DN', 40: 'DN', 50: 'D', 65: 'DN', 80: 'DN', 100: 'D', 125: 'D', 150: 'D', 200: 'D', 250: 'DN', 300: 'DN' };
+
+        const pad2 = n => String(n).padStart(2, '0');
+        const kmPitch = m => m <= 10 ? '0.75' : m <= 20 ? '1.00' : m <= 50 ? '1.50' : m <= 150 ? '2.00' : '3.00';
+
+        function norm(s) {
+          return String(s || '').toUpperCase().replace(/[\r\n]+/g, ' ').replace(/[×✕]/g, 'X').replace(/\s+/g, ' ').trim();
+        }
+        // Grade / material -> Gx. Returns { code, assumed }
+        function parseGrade(t) {
+          if (/\b12\.9\b/.test(t)) return { code: 'G3', assumed: false };
+          if (/\b10\.9\b/.test(t)) return { code: 'G2', assumed: false };
+          if (/\b8\.8\b/.test(t)) return { code: 'G1', assumed: false };
+          if (/SS[\s-]?310/.test(t)) return { code: 'G6', assumed: false };
+          if (/SS[\s-]?316|\bA4\b/.test(t)) return { code: 'G5', assumed: false };
+          if (/SS[\s-]?304|\bA2\b|STAINLESS|\bSS\b/.test(t)) return { code: 'G4', assumed: false };
+          return { code: DEFAULT_GRADE, assumed: true };
+        }
+        // "M12 x 40", "M12X40", "12 X 40" -> { m, l }
+        function parseMxL(t) {
+          let m = t.match(/\bM\s*(\d{1,3})\s*X\s*(\d{1,4})\b/) || t.match(/\b(\d{1,3})\s*X\s*(\d{1,4})\s*(?:MM|LG|LONG)?\b/);
+          return m ? { m: parseInt(m[1], 10), l: parseInt(m[2], 10) } : null;
+        }
+        function parseM(t) {
+          let m = t.match(/\bM\s*(\d{1,3})\b/);
+          return m ? parseInt(m[1], 10) : null;
+        }
+        // Trailing size after the standard number, e.g. "IS 2016 A- 11", "IS 3063- 12-A", "IS 6731 LN - 125-N"
+        function parseTrailingSize(t) {
+          let m = t.match(/IS\s*\d{4}(?:\s*\(?PART\s*\d\)?|-\d)?\s*(?:[A-Z]{1,2}\s*)?-\s*(\d{1,3}(?:\.\d)?)\b/);
+          if (m) return m[1];
+          // bare size, e.g. "SPRING WASHER 16MM", "WASHER 12" (ignore standard numbers like 2016 / 3063)
+          m = t.replace(/\b(IS|DIN|ISO|EN)\s*-?\s*\d{3,5}(?:[-\s]*\d)?/g, ' ').match(/\b(\d{1,3}(?:\.\d)?)\s*(?:MM)?\b/);
+          return m ? m[1] : null;
+        }
+        function gradeSuffix(g, spaced) {
+          return (spaced && (g === 'G1' || g === 'G2' || g === 'G3')) ? ' ' + g : g;
+        }
+        const res = (family, code, desc, assumed, note) => ({ code, desc, family, assumed: !!assumed, note: note || '' });
+
+        // ---- family recognisers (order matters: nuts/washers before bolts) ----
+        const RULES = [
+          {
+            label: 'Lock nut (KM)',
+            test: t => /IS\s*6731|LOCK\s*NUT|\bKM\s*\d\d\b/.test(t) && !/LOCK\s*WASHER/.test(t),
+            map: t => {
+              let m = parseM(t) || parseInt(parseTrailingSize(t) || '', 10) || null;
+              let km = t.match(/\bKM\s*(\d\d)\b/);
+              if (km) { let mm = Object.keys(KM).find(k => KM[k] === km[1]); m = mm ? parseInt(mm, 10) : m; }
+              if (!m || !KM[m]) return null;
+              return res('Lock nut', 'FSNT10KM' + KM[m], 'LOCK NUT -M' + m + ' x ' + kmPitch(m) + ' ,KM' + KM[m], false);
+            }
+          },
+          {
+            label: 'Hexagon nut',
+            test: t => /\bNUT\b/.test(t) && !/LOCK\s*NUT|THIN|FLANGE|NYLOC|WING|DOME|CAP\s*NUT|WITH\s*WASHER|U-?BOLT|BOLT\s*&|BOLT,/.test(t),
+            map: t => {
+              let m = parseM(t); if (!m) return null;
+              let g = parseGrade(t);
+              return res('Hexagon nut', 'FSNT07M' + pad2(m) + gradeSuffix(g.code, true), 'HEXAGON NUT- M' + pad2(m) + ' ,' + GRADE_TEXT[g.code], g.assumed);
+            }
+          },
+          {
+            label: 'Plain washer',
+            test: t => /IS\s*2016|PLAIN\s*WASHER|FLAT\s*WASHER|\bWASHER\b(?!.*SPRING)/.test(t) && !/SPRING|LOCK\s*WASHER|TAPER|MACHIN|COPPER|BOLT|NUT/.test(t),
+            map: t => {
+              let m = parseM(t);
+              if (!m) { let s = parseTrailingSize(t); if (s) m = WASHER_HOLE_TO_M[s] || (Number.isInteger(+s) ? +s : null); }
+              if (!m) return null;
+              let g = parseGrade(t);
+              let ss = !g.assumed && /^G[456]$/.test(g.code);
+              return res('Plain washer', 'FSWR13M' + pad2(m) + (ss ? g.code : ''), 'PLAIN WASHER -M' + pad2(m) + (ss ? ' ,' + GRADE_TEXT[g.code] : ''), false);
+            }
+          },
+          {
+            label: 'Spring washer',
+            test: t => /IS\s*3063|IS\s*6735|SPRING\s*(LOCK\s*)?WASHER/.test(t),
+            map: t => {
+              let m = parseM(t);
+              if (!m) { let s = parseTrailingSize(t); if (s) m = parseInt(s, 10) || null; }
+              if (!m) return null;
+              let g = parseGrade(t);
+              let ss = !g.assumed && /^G[456]$/.test(g.code);
+              let note = /IS\s*6735/.test(t) ? 'IS 6735 (heavy duty) mapped to standard spring washer family' : '';
+              return res('Spring washer', 'FSWR16D' + pad2(m) + (ss ? g.code : ''), 'SPRING WASHER-' + pad2(m) + 'MM' + (ss ? ',' + GRADE_TEXT[g.code] : ''), false, note);
+            }
+          },
+          {
+            label: 'Allen bolt (SHCS)',
+            test: t => /IS\s*2269|SOCKET\s*HEAD\s*CAP|\bSHCS\b|ALLEN\s*(BOLT|SCREW|CAP)/.test(t) && !/COUNTERSUNK|\bCSK\b|GRUB|PLUG/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              let g = parseGrade(t);
+              return res('Allen bolt', 'FSBT01M' + pad2(s.m) + 'L' + pad2(s.l) + g.code, 'ALLEN BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g.code], g.assumed);
+            }
+          },
+          {
+            label: 'CSK bolt',
+            test: t => /IS\s*6761|COUNTERSUNK|\bCSK\b|\bC\.S\.K\b/.test(t) && /SCREW|BOLT|CSK/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              let g = parseGrade(t);
+              return res('CSK bolt', 'FSBT03M' + pad2(s.m) + 'L' + pad2(s.l) + g.code, 'CSK BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g.code], g.assumed);
+            }
+          },
+          {
+            label: 'Grub screw',
+            test: t => /GRUB\s*SCREW|SET\s*SCREW|IS\s*6094/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              let g = parseGrade(t);
+              return res('Grub screw', 'FSSW06M' + pad2(s.m) + 'L' + pad2(s.l) + g.code, 'HEX SOCKET GRUB SCREW- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g.code], g.assumed);
+            }
+          },
+          {
+            label: 'Hexagon head bolt',
+            test: t => /IS\s*1363|HEX(?:AGON)?\.?\s*(HEAD\s*)?(BOLT|SCREW)|\bHHB\b|\bHEX\s*BOLT\b/.test(t) && !/NUT\b.*(?!BOLT)|WITH\s*NUT|,NUT/.test(t.replace(/BOLT/g, '')),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              let g = parseGrade(t);
+              let note = /GRADE\s*C|\b4\.6\b|\b4\.8\b/.test(t) ? 'Design says Grade C (4.6); master has no 4.6 hex bolts' : '';
+              return res('Hexagon head bolt', 'FSBT08M' + pad2(s.m) + 'L' + pad2(s.l) + g.code, 'HEXAGON HEAD BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g.code], g.assumed, note);
+            }
+          },
+          {
+            label: 'Dowel pin',
+            test: t => /DOWEL\s*PIN/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              return res('Dowel pin', 'FSPN25M' + pad2(s.m) + 'L' + pad2(s.l), 'DOWEL PIN- M' + pad2(s.m) + 'X' + s.l + 'MM', false);
+            }
+          },
+          {
+            label: 'Circlip',
+            test: t => /CIRCLIP|RETAINING\s*RING/.test(t),
+            map: t => {
+              let d = t.match(/(?:DIA|D|Ø| )?\s*-?\s*(\d{1,3})\s*(?:MM)?\b(?!\s*X)/); if (!d) return null;
+              let internal = /INTERNAL|\bINT\b|BORE/.test(t);
+              return res(internal ? 'Internal circlip' : 'External circlip', 'FSCC' + (internal ? '20' : '19') + 'D' + pad2(d[1]), (internal ? 'INTERNAL CIRCLIP ,DIA-' : 'EXTERNAL CIRCLIP ,DIA-') + pad2(d[1]) + ' MM', false);
+            }
+          },
+          {
+            label: 'Parallel key',
+            test: t => /PARALLEL\s*KEY|\bKEY\b.*\d+\s*X\s*\d+\s*X\s*\d+/.test(t),
+            map: t => {
+              let k = t.match(/(\d{1,3})\s*X\s*(\d{1,3})\s*X\s*(\d{1,4})/); if (!k) return null;
+              return res('Parallel key', 'FSKE12D' + pad2(k[1]) + 'L' + pad2(k[2]) + 'H' + k[3], 'PARALLEL KEY-(' + (+k[1]) + 'X' + (+k[2]) + 'X' + (+k[3]) + ')MM', false);
+            }
+          },
+          {
+            label: 'Flange gasket',
+            test: t => /GASK[EI]T/.test(t) && /\b(DN|NB)\s*-?\s*\d{2,3}|\d{2,3}\s*(NB|DN)\b/.test(t),
+            map: t => {
+              let d = t.match(/\b(?:DN|NB)\s*-?\s*(\d{2,3})\b/) || t.match(/\b(\d{2,3})\s*(?:NB|DN)\b/); if (!d) return null;
+              let dn = parseInt(d[1], 10);
+              let ansi = /ANSI|B16\.5|CL[\s-]*150|CLASS\s*150/.test(t);
+              if (ansi) return res('Flange gasket (ANSI)', 'GFL' + (GASKET_DN_STYLE[dn] || 'DN') + dn + 'S1', 'GASKET,NEOPRENE,DN' + dn + ',CL-150,ANSI B16.5', false);
+              let thk = (t.match(/(\d(?:\.\d)?)\s*(?:MM)?\s*THK/) || [])[1] || '3';
+              let assumed = !/EN[\s-]*1092|PN\s*6/.test(t);
+              return res('Flange gasket (EN-1092 PN6)', 'GPFL' + (GASKET_DN_STYLE[dn] || 'DN') + dn + 'S2', 'GASKET,PN6 FLANGE,DN' + dn + ',' + thk + 'THK,EN-1092', assumed, assumed ? 'Flange standard not stated; EN-1092 PN6 assumed' : '');
+            }
+          }
+        ];
+
+        // Is this a project drawing number (-> YS code) rather than a standard designation?
+        function isStandardDesignation(t) {
+          return /^(IS|DIN|ISO|EN|ANSI|ASME|JIS|BS)\s*[-\s]?\d/.test(t) || /GASK[EI]T/.test(t);
+        }
+        function isProjectDrawingNo(dwg) {
+          let t = norm(dwg).replace(/[\s-]/g, '');
+          return /^[A-Z]{0,2}\d{4}[A-Z]{1,5}\d{2,}$/.test(t) || /^\d{4}[A-Z]{1,5}[A-Z0-9]*\d{3,}$/.test(t);
+        }
+
+        // Main entry. Returns { code, desc, family, source: 'drawing'|'std'|'none', assumed, note }
+        function map(drawingNo, component) {
+          let dwg = norm(drawingNo), comp = norm(component);
+          let text = (dwg + ' ' + comp).trim();
+          if (dwg && !isStandardDesignation(dwg) && isProjectDrawingNo(dwg)) return { source: 'drawing' };
+          for (let r of RULES) {
+            if (!r.test(text)) continue;
+            let out = r.map(text);
+            if (out) { out.source = 'std'; return out; }
+          }
+          return { source: 'none', code: '', desc: '', family: '', assumed: false, note: '' };
+        }
+        return { map, isProjectDrawingNo, isStandardDesignation, RULES, DEFAULT_GRADE };
+      })();
+
+      // Drawing-based YS code: YS + drawing number without dashes.
+      function getYSCodeFromDrawing(drawingNo) {
         if (!drawingNo) return '';
         return 'YS' + String(drawingNo).replace(/-/g, '').trim();
       }
 
-      function getYSDescription(component, drawingNo) {
+      function getYSDescriptionFromDrawing(component, drawingNo) {
         let comp = String(component || '').trim();
         let normalizedDwg = String(drawingNo || '').replace(/-/g, '').trim();
         let prefix = normalizedDwg.substring(0, 7);
@@ -6032,6 +6706,44 @@
           return comp + ' (' + prefix + ')';
         }
         return comp;
+      }
+
+      // One decision for a BOM row: drawing part -> YS code; standard part
+      // -> SAP family code from YDC_STD; otherwise blank (PM looks it up).
+      // A drawing-number field that holds a standard designation such as
+      // "IS 1363(Part2) - M12 x 40" is treated as a standard part, never
+      // turned into a YS code.
+      function ydcResolveCode(drawingNo, component) {
+        let m = YDC_STD.map(drawingNo, component);
+        if (m.source === 'std') return m;
+        let dwg = String(drawingNo || '').trim();
+        if (dwg && !YDC_STD.isStandardDesignation(dwg.toUpperCase())) {
+          return { source: 'drawing', code: getYSCodeFromDrawing(dwg), desc: getYSDescriptionFromDrawing(component, dwg), family: '', assumed: false, note: '' };
+        }
+        return { source: 'none', code: '', desc: String(component || '').trim(), family: '', assumed: false, note: '' };
+      }
+      w.ydcResolveCode = ydcResolveCode;
+
+      function getYSCode(drawingNo, component) {
+        return ydcResolveCode(drawingNo, component).code;
+      }
+
+      function getYSDescription(component, drawingNo) {
+        return ydcResolveCode(drawingNo, component).desc;
+      }
+
+      // Small badge shown under the YSCODE cell explaining where the code came from.
+      function ydcCodeHint(st) {
+        let m = ydcResolveCode(st.drawingNo, st.component);
+        if (m.source === 'std') {
+          let cls = m.assumed ? 'bg-warning text-dark' : 'bg-success';
+          let tip = 'Standard part: ' + m.family + (m.assumed ? ' — grade / standard assumed, SAP team to confirm' : '') + (m.note ? '. ' + m.note : '');
+          return '<div class="mt-1"><span class="badge ' + cls + '" style="font-size:0.62rem;" title="' + esc(tip) + '"><i class="fa fa-wand-magic-sparkles me-1"></i>STD · ' + esc(m.family) + (m.assumed ? ' · assumed' : '') + '</span></div>';
+        }
+        if (m.source === 'none' && !st.ysCode) {
+          return '<div class="mt-1"><span class="badge bg-danger" style="font-size:0.62rem;" title="No drawing number and no matching standard-part rule. Search the SAP item code dump and paste the code."><i class="fa fa-magnifying-glass me-1"></i>Search item code dump</span></div>';
+        }
+        return '';
       }
 
       window.ydcDynamicCols = window.ydcDynamicCols || [];
@@ -6048,7 +6760,7 @@
           if (!colName) return;
           let colKey = 'custom_' + colName.toLowerCase().replace(/[^a-z0-9]/g, '');
           window.ydcDynamicCols.push({ key: colKey, label: colName });
-          
+
           let proj = getP(w._ydcState.projId);
           let loeIdx = w._ydcState.loeIdx;
           renderAssemblyExcelTable(proj, loeIdx);
@@ -6062,7 +6774,7 @@
           let ysDesc = $(this).find('.ydc-val-ysdesc').val();
           if (ysCode) ysCode = ysCode.trim();
           if (ysDesc) ysDesc = ysDesc.trim();
-          
+
           let dwg = $(this).find('.ydc-text-dwg').text().trim();
           let comp = $(this).find('.ydc-text-comp').text().trim();
           let qty = $(this).find('.ydc-text-qty').text().trim();
@@ -6104,7 +6816,7 @@
           await window.saveYDCExcelTableSilent();
 
           lr.sapSent = true;
-          
+
           let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
           if (saveFn) await saveFn();
 
@@ -6280,87 +6992,87 @@
           </div>
         `;
 
-      window.uploadYDCExcelBOM = function (input) {
-        let files = input.files;
-        if (!files || files.length === 0) return;
-        let file = files[0];
+        window.uploadYDCExcelBOM = function (input) {
+          let files = input.files;
+          if (!files || files.length === 0) return;
+          let file = files[0];
 
-        let proj = getP(w._ydcState.projId);
-        let loeIdx = w._ydcState.loeIdx;
-        let lr = proj && proj.loeData && proj.loeData[loeIdx];
-        if (!lr) {
-          input.value = '';
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = async function (e) {
-          try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheet = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheet];
-            const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-            let subtasks = [];
-            let wtColIdx = 7;
-            let h4Val = (sheetData[3] && sheetData[3][7] !== undefined) ? String(sheetData[3][7]).trim() : '';
-            if (!h4Val) {
-              wtColIdx = 6;
-            }
-
-            for (let i = 2; i < sheetData.length; i++) {
-              const row = sheetData[i];
-              if (!row || row.length === 0) continue;
-
-              const comp = row[3] !== undefined ? String(row[3]).trim() : '';
-              const dwg = row[1] !== undefined ? String(row[1]).trim() : '';
-              const qty = row[4] !== undefined ? String(row[4]).trim() : '';
-              const mat = row[5] !== undefined ? String(row[5]).trim() : '';
-              const wt = row[wtColIdx] !== undefined ? String(row[wtColIdx]).trim() : '';
-
-              if (comp || dwg || qty || mat || wt) {
-                subtasks.push({
-                  component: comp,
-                  drawingNo: dwg,
-                  qty: qty,
-                  material: mat,
-                  weight: wt
-                });
-              }
-            }
-
-            lr.subtasks = subtasks;
-            if (subtasks.length > 0 && !lr.drawingNo) {
-              let firstDwg = subtasks.find(s => s.drawingNo)?.drawingNo;
-              if (firstDwg) {
-                lr.drawingNo = firstDwg;
-              }
-            }
-
-            if (proj.execution && proj.execution.assemblies) {
-              proj.execution.assemblies = proj.execution.assemblies.filter(x => x.loeIdx !== loeIdx);
-            }
-
-            let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
-            if (saveFn) await saveFn();
-
-            Swal.fire({
-              icon: 'success',
-              title: 'Excel Imported',
-              text: `Successfully imported ${subtasks.length} component(s) into BOM.`,
-              timer: 2000,
-              showConfirmButton: false
-            });
-
-            renderAssemblyExcelTable(proj, loeIdx);
-          } catch (err) {
-            Swal.fire('Error Parsing Excel', err.message || err, 'error');
+          let proj = getP(w._ydcState.projId);
+          let loeIdx = w._ydcState.loeIdx;
+          let lr = proj && proj.loeData && proj.loeData[loeIdx];
+          if (!lr) {
+            input.value = '';
+            return;
           }
-          input.value = '';
+
+          const reader = new FileReader();
+          reader.onload = async function (e) {
+            try {
+              const data = new Uint8Array(e.target.result);
+              const workbook = XLSX.read(data, { type: 'array' });
+              const firstSheet = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheet];
+              const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+              let subtasks = [];
+              let wtColIdx = 7;
+              let h4Val = (sheetData[3] && sheetData[3][7] !== undefined) ? String(sheetData[3][7]).trim() : '';
+              if (!h4Val) {
+                wtColIdx = 6;
+              }
+
+              for (let i = 2; i < sheetData.length; i++) {
+                const row = sheetData[i];
+                if (!row || row.length === 0) continue;
+
+                const comp = row[3] !== undefined ? String(row[3]).trim() : '';
+                const dwg = row[1] !== undefined ? String(row[1]).trim() : '';
+                const qty = row[4] !== undefined ? String(row[4]).trim() : '';
+                const mat = row[5] !== undefined ? String(row[5]).trim() : '';
+                const wt = row[wtColIdx] !== undefined ? String(row[wtColIdx]).trim() : '';
+
+                if (comp || dwg || qty || mat || wt) {
+                  subtasks.push({
+                    component: comp,
+                    drawingNo: dwg,
+                    qty: qty,
+                    material: mat,
+                    weight: wt
+                  });
+                }
+              }
+
+              lr.subtasks = subtasks;
+              if (subtasks.length > 0 && !lr.drawingNo) {
+                let firstDwg = subtasks.find(s => s.drawingNo)?.drawingNo;
+                if (firstDwg) {
+                  lr.drawingNo = firstDwg;
+                }
+              }
+
+              if (proj.execution && proj.execution.assemblies) {
+                proj.execution.assemblies = proj.execution.assemblies.filter(x => x.loeIdx !== loeIdx);
+              }
+
+              let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
+              if (saveFn) await saveFn();
+
+              Swal.fire({
+                icon: 'success',
+                title: 'Excel Imported',
+                text: `Successfully imported ${subtasks.length} component(s) into BOM.`,
+                timer: 2000,
+                showConfirmButton: false
+              });
+
+              renderAssemblyExcelTable(proj, loeIdx);
+            } catch (err) {
+              Swal.fire('Error Parsing Excel', err.message || err, 'error');
+            }
+            input.value = '';
+          };
+          reader.readAsArrayBuffer(file);
         };
-        reader.readAsArrayBuffer(file);
-      };
 
         if (window.ydcActiveSubStage === 'sap') {
           let dynamicHeaders = '';
@@ -6423,7 +7135,7 @@
             html += `<tr class="empty-row"><td colspan="${totalColsSpan}" class="text-center py-4 text-muted"><i class="fa fa-folder-open me-2 opacity-50"></i>No components found.</td></tr>`;
           } else {
             subtasks.forEach((st, i) => {
-              let ysCode = st.ysCode || getYSCode(st.drawingNo);
+              let ysCode = st.ysCode || getYSCode(st.drawingNo, st.component);
               let ysDesc = st.ysDescription || getYSDescription(st.component, st.drawingNo);
 
               let dynamicCells = '';
@@ -6440,6 +7152,7 @@
                   <td class="text-center align-middle text-muted fw-bold row-num">${i + 1}</td>
                   <td class="align-middle">
                     <input type="text" class="form-control form-control-sm border-0 ydc-val-yscode ydc-paste-target fw-semibold text-primary" value="${esc(ysCode)}" ${sapSent ? 'disabled' : ''}>
+                    ${ydcCodeHint(st)}
                   </td>
                   <td class="align-middle">
                     <input type="text" class="form-control form-control-sm border-0 ydc-val-ysdesc ydc-paste-target fw-semibold text-dark" value="${esc(ysDesc)}" ${sapSent ? 'disabled' : ''}>
@@ -6510,7 +7223,7 @@
             html += `<tr class="empty-row"><td colspan="8" class="text-center py-4 text-muted"><i class="fa fa-folder-open me-2 opacity-50"></i>No components found.</td></tr>`;
           } else {
             subtasks.forEach((st, i) => {
-              let ysCode = st.ysCode || getYSCode(st.drawingNo);
+              let ysCode = st.ysCode || getYSCode(st.drawingNo, st.component);
               let ysDesc = st.ysDescription || getYSDescription(st.component, st.drawingNo);
 
               html += `
@@ -6518,6 +7231,7 @@
                   <td class="text-center align-middle text-muted fw-bold row-num">${i + 1}</td>
                   <td class="align-middle">
                     <input type="text" class="form-control form-control-sm border-0 ydc-val-yscode ydc-paste-target fw-semibold text-primary" value="${esc(ysCode)}" ${sapReviewCompleted ? 'disabled' : ''}>
+                    ${ydcCodeHint(st)}
                   </td>
                   <td class="align-middle">
                     <input type="text" class="form-control form-control-sm border-0 ydc-val-ysdesc ydc-paste-target fw-semibold text-dark" value="${esc(ysDesc)}" ${sapReviewCompleted ? 'disabled' : ''}>
@@ -6579,7 +7293,7 @@
             html += `<tr class="empty-row"><td colspan="11" class="text-center py-4 text-muted"><i class="fa fa-folder-open me-2 opacity-50"></i>No components found.</td></tr>`;
           } else {
             subtasks.forEach((st, i) => {
-              let ysCode = st.ysCode || getYSCode(st.drawingNo);
+              let ysCode = st.ysCode || getYSCode(st.drawingNo, st.component);
               let ysDesc = st.ysDescription || getYSDescription(st.component, st.drawingNo);
               let material = st.material || '—';
 
@@ -6673,7 +7387,7 @@
 
       window.setColumnWidth = function (colIdx) {
         let th = $('#ydcExcelTable thead th').eq(colIdx);
-        let headerText = th.contents().filter(function() { return this.nodeType === 3; }).text().trim() || ("Column " + (colIdx + 1));
+        let headerText = th.contents().filter(function () { return this.nodeType === 3; }).text().trim() || ("Column " + (colIdx + 1));
         let currentWidth = th.outerWidth();
 
         Swal.fire({
@@ -6694,13 +7408,13 @@
         });
       };
 
-      window.recalcRowYS = function (input) {};
+      window.recalcRowYS = function (input) { };
 
       window.addYDCExcelRow = function (st = {}) {
         let tbody = $('#ydcExcelTable tbody');
         tbody.find('.empty-row').remove();
         let trCount = tbody.find('tr').length + 1;
-        let ysCode = st.ysCode || getYSCode(st.drawingNo);
+        let ysCode = st.ysCode || getYSCode(st.drawingNo, st.component);
         let ysDesc = st.ysDescription || getYSDescription(st.component, st.drawingNo);
 
         let dynamicCells = '';
@@ -6791,7 +7505,7 @@
           $('#ydcExcelTable tbody tr.ydc-excel-row').each(function (idx) {
             let ysCodeInput = $(this).find('.ydc-val-yscode');
             let ysDescInput = $(this).find('.ydc-val-ysdesc');
-            
+
             if (subtasks[idx]) {
               if (ysCodeInput.length) subtasks[idx].ysCode = ysCodeInput.val().trim();
               if (ysDescInput.length) subtasks[idx].ysDescription = ysDescInput.val().trim();
@@ -6924,13 +7638,13 @@
 
       window.exportYDCExcelTable = function () {
         let table = document.getElementById("ydcExcelTable");
-        let wb = XLSX.utils.table_to_book(table, {sheet: "BOM"});
+        let wb = XLSX.utils.table_to_book(table, { sheet: "BOM" });
         XLSX.writeFile(wb, "BOM_Export.xlsx");
       };
 
       window.copyYDCColumn = function (colIdx) {
         let vals = [];
-        let header = $('#ydcExcelTable thead th').eq(colIdx).contents().filter(function() {
+        let header = $('#ydcExcelTable thead th').eq(colIdx).contents().filter(function () {
           return this.nodeType === 3;
         }).text().trim();
         if (!header) header = "Column " + colIdx;
@@ -7255,7 +7969,7 @@
       w.showDashboardView = function () {
         hideAllYDC();
         if (_origDashView) _origDashView.call(this);
-        else { $('#drawingsView').hide(); $('#dashboardView').fadeIn(); if (w.renderTable) w.renderTable(); }
+        else { $('#drawingsView').hide(); $('#dashboardView').fadeIn(); $('.main').removeClass('drawings-mode'); $('#navYdAscend').hide(); if (w.renderTable) w.renderTable(); }
       };
 
       let _origDrawView = w.showDrawingsView;
@@ -7265,8 +7979,8 @@
       };
 
       // ---- Expose on window so HTML onclick attributes can reach them ----
-      w.openYDComplanProject = w.openYDComplanProject;   // already set
-      w.openYDComplanAssembly = w.openYDComplanAssembly;  // already set
+      w.openYDAstraProject = w.openYDAstraProject;   // already set
+      w.openYDAstraAssembly = w.openYDAstraAssembly;  // already set
 
     })(window);
   </script>

@@ -134,6 +134,7 @@ ydcomplan/
 ├── yd-footer.png                       # Footer logo image
 ├── ydbg.jpg                            # Full-page background image
 ├── L.O.E. 2611.xls                     # Sample LOE (List of Equipment) Excel file
+├── ITEM CODE DUMP 14 JULY 2026.xlsx    # SAP material master dump (~55,000 items, see §12A)
 ├── original live website source code.css                 # ⚠️ REFERENCE FILE (see below)
 ├── original live website drawings.html source code.css   # ⚠️ REFERENCE FILE (see below)
 └── .git/                               # Git repository
@@ -535,6 +536,127 @@ Each stage has configurable columns defined in `YDC_COLS`:
 - Row-level Save + Submit buttons
 - Submitted rows get green background (`ydc-submitted-row`)
 - Bulk paste from Excel supported (`ydc-paste-target`)
+
+---
+
+## 12A. SAP Code Auto-Mapper (Built by Fable — Critical Module)
+
+> **This section documents the SAP auto-mapping rule engine that was built by Claude Fable 5.0 in September 2026.** It is one of the most complex and domain-specific parts of the codebase.
+
+### What Problem It Solves
+
+In the SAP stage of YDComplan, each BOM component needs a **YSCODE** (SAP material code) and a **YSDESCRIPTION**. There are two fundamentally different cases:
+
+1. **Components WITH a drawing number** → Auto-generate a YS code using a deterministic formula
+2. **Components WITHOUT a drawing number** (standard/bought-out parts) → Look up or generate a family-specific code from the SAP material master
+
+### Case 1: Drawing-Based Parts (YS Codes)
+
+When a BOM component has a drawing number (e.g., `2305-CAR-01-01-00-001`), the mapper generates:
+
+| Field | Input | Output |
+|-------|-------|--------|
+| YSCODE | Drawing No: `2305-CAR-01-01-00-001` | `YS2305CAR010100001` |
+| YSDESCRIPTION | Component: `L.H. WHEEL SHAFT` | `L.H. WHEEL SHAFT (2305CAR)` |
+
+**Formula:**
+- YSCODE = `"YS"` + drawing number with all hyphens/spaces removed
+- YSDESCRIPTION = component name + `" ("` + first 7 chars of drawing no (no hyphens) + `")"`
+- The project tag in parentheses is the project code extracted from the drawing number
+
+### Case 2: Standard Parts (Family Codes from Item Code Dump)
+
+When a BOM component has NO drawing number (or the "drawing number" field contains an IS standard reference like `IS 1363(Part2) - M12 x 40`), the component is a **standard/bought-out part**.
+
+#### The Item Code Dump
+
+The file `ITEM CODE DUMP 14 JULY 2026.xlsx` is the **SAP material master** — a single sheet with ~55,000 items and 5 columns:
+
+| Column A | Column B | Column C | Column D | Column E |
+|----------|----------|----------|----------|----------|
+| Product (SAP code) | Description | Product Type | Product Group | Base Unit of Measure |
+
+This is NOT a BOM — it's the master list of ALL materials in SAP. The code prefix identifies the family:
+
+- **~27,600 YS-prefixed codes** → Drawing-based parts (already handled by Case 1)
+- **~27,000 non-YS codes** → Standard/bought-out materials with family-specific coding
+
+#### Decoded Family Coding Schemes
+
+Fable decoded these families from the dump:
+
+**Fasteners (prefix: `FS`):**
+```
+FS + TypeCode + M-size + L-length + G-grade
+
+Type Codes:
+  BT08 = Hexagon Head Bolt
+  BT01 = Allen (Socket Head Cap Screw) Bolt  
+  BT03 = CSK (Countersunk) Bolt
+  NT07 = Hex Nut
+  NT10 = Lock Nut (by KM number)
+  WR13 = Plain Washer
+  WR16 = Spring Washer
+  
+Grade Map:
+  G1 = Grade 8.8
+  G2 = Grade 10.9
+  G3 = Grade 12.9
+  G4 = SS-304
+  G5 = SS-316
+  G6 = SS-310
+```
+
+**Example:** `FSBT08M12L40G2` = "HEXAGON HEAD BOLT- M12X40MM ,G-10.9"
+
+**Gaskets (prefix: `GP`):**
+```
+GPFL + size + S2    (for EN-1092 PN6 flanges)
+```
+
+**Other families (NOT yet decoded — manual lookup required):**
+- `BG` = Bearings (e.g., `BG013207SF` = "BEARING, ANGULAR CONTACT BALL, 3207, SKF")
+- `MO` = Motors (e.g., `MOAC0.09P8FL01` = AC Motor)
+- `GB` = Gearboxes
+- `HC` = Hydraulic Cylinders
+- `CB` = Cables
+- `MAP` = Semi-finished in-house parts (e.g., `MAP00001SP` = "ABUTMENT RING")
+- `ZZ` = Electrical components (MCBs, MCCBs, ACBs, switchgear)
+
+### The Rule Engine
+
+The SAP auto-mapper works as follows for each BOM row:
+
+```
+1. If component has a real drawing number → Generate YS code (Case 1)
+2. If "drawing number" field contains an IS standard reference (IS 1363, IS 1364, etc.):
+   a. Parse the part type, size, length, and grade from the description
+   b. Identify the family (bolt, nut, washer, etc.)
+   c. Generate the code using the decoded scheme
+   d. Generate the description in the master's exact format
+3. If no rule matches → Flag as "Search item code dump" (PM looks it up manually)
+```
+
+### Badge System (Visual Indicators)
+
+Each row in the SAP table shows a status badge:
+
+| Badge | Color | Meaning |
+|-------|-------|---------|
+| **STD** | 🟢 Green | Exact rule match — code generated with high confidence |
+| **Assumed** | 🟡 Amber | Code generated but grade/standard was assumed (e.g., default 10.9 grade) |
+| **Search item code dump** | 🔴 Red | No rule applies — PM must search the master and paste the code manually |
+
+### BOM Parser Bug Fix
+
+Fable identified and fixed a bug: the BOM parser was mapping the Excel "PART NO." column into the `drawingNo` field. This caused standard designations like `IS 1363(Part2) - M12 x 40` to be treated as drawing numbers and generate garbage YS codes like `YSIS1363Part2M12x40`. The fix ensures these are now recognized as standard part references and processed through the family rule engine instead.
+
+### Open Decisions (Need PM Input)
+
+1. **Default grade for IS 1363 "Grade C" hex bolts:** Grade C corresponds to grade 4.6, which doesn't exist in the master. Currently defaults to 10.9 (G2) and flags as "assumed". Should it default to 8.8 (G1) instead?
+2. **Missing families:** Bearings, motors, cylinders, and cables have no auto-mapping rules yet. Need example BOM rows for these families to decode the scheme.
+3. **Dump refresh strategy:** The file is dated "14 July 2026". Designed as "upload the latest dump" rather than baked in — the PM can upload a fresh dump when the master is updated.
+4. **MAP-prefix items (semi-finished):** Do in-house semi-finished parts (like `MAP00001SP` "ABUTMENT RING") ever appear in BOMs, or are no-drawing components always bought-out?
 
 ---
 
