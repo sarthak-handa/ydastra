@@ -1,0 +1,3460 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>YD PROJECTS — Activity Log</title>
+    <link href="assets/img/yd-favicon.png" rel="icon" />
+    <link
+      href="assets/vendor/bootstrap/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link href="assets/vendor/aos/aos.css" rel="stylesheet" />
+    <link href="assets/vendor/swiper/swiper-bundle.min.css" rel="stylesheet" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"
+    />
+    <link href="assets/css/main.css" rel="stylesheet" />
+    <style>
+      /* ══════════════════════════════════════════════════════════════════
+         Activity Log — design tokens.
+
+         Everything below is scoped under `.al` so it can't leak into the
+         rest of the app. Colours are defined once here as roles; nothing
+         further down the page hard-codes a hex.
+
+         The eight series hues are the validated categorical palette
+         (adjacent CVD ΔE 9.1, normal-vision ΔE 19.6 on this surface). Each
+         has a darker `-ink` step for text and glyphs, because the base hues
+         of aqua / yellow / magenta sit below 3:1 on white — the -ink steps
+         all clear 5:1. Charts use a SINGLE hue; the eight are only used for
+         area chips, which always carry their name in text so colour is
+         never the only cue.
+         ══════════════════════════════════════════════════════════════════ */
+      :root {
+        /* surfaces */
+        --page: #eef2f6;
+        --card: #ffffff;
+        --sunken: #f5f8fa;
+        --line: #e3e9ef;
+        --line-soft: #eef2f6;
+
+        /* ink */
+        --ink-1: #16283a;
+        --ink-2: #4c5d6d;
+        --ink-3: #7f8d9a;
+
+        /* brand */
+        --brand: #2e4f6f;
+        --brand-soft: #eaf0f6;
+        --accent: #ad283f;
+
+        /* the one hue every chart is drawn in */
+        --data: #2a78d6;
+        --data-soft: #dbe9fa;
+
+        /* categorical slots — area identity only, never a chart series */
+        --s1: #2a78d6;  --s1-ink: #1f5da8;
+        --s2: #eb6834;  --s2-ink: #b8471a;
+        --s3: #1baf7a;  --s3-ink: #127954;
+        --s4: #eda100;  --s4-ink: #8a6000;
+        --s5: #e87ba4;  --s5-ink: #b23e69;
+        --s6: #008300;  --s6-ink: #006300;
+        --s7: #4a3aa7;  --s7-ink: #3b2e86;
+        --s8: #e34948;  --s8-ink: #b62f2e;
+        --s0: #8b98a6;  --s0-ink: #5b6875; /* the unslotted tail */
+
+        --r-lg: 16px;
+        --r-md: 12px;
+        --r-sm: 8px;
+        --shadow-1: 0 1px 2px rgba(22, 40, 58, 0.05);
+        --shadow-2: 0 10px 30px -12px rgba(22, 40, 58, 0.25);
+
+      }
+      .al {
+        color: var(--ink-1);
+      }
+
+      /* ── shell ────────────────────────────────────────────────────── */
+      /* The site template paints a full-bleed hero image behind the first
+         screen. A data page needs a calm, opaque plane — otherwise the tiles
+         and the title sit on top of the artwork and become unreadable. */
+      #hero.hero.section {
+        display: none !important;
+      }
+      body.index-page,
+      main.main {
+        background: var(--page);
+        /* the template reserves a tall band under the sticky header for the
+           hero artwork; with the hero hidden that is just dead space */
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      #contact.contact.section {
+        background: var(--page);
+        padding: 0 !important;
+        overflow: visible;
+      }
+      .al {
+        background: var(--page);
+        padding: 24px 22px 36px;
+        min-height: 60vh;
+      }
+      .al-shell {
+        max-width: 1640px;
+        margin: 0 auto;
+      }
+      .al .card-x {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--r-lg);
+        box-shadow: var(--shadow-1);
+        /* so a card's body can stretch to fill an equal-height grid row
+           instead of leaving dead space under a short chart */
+        display: flex;
+        flex-direction: column;
+      }
+      .al .card-x > .card-hd {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px 0;
+      }
+      .al .card-x > .card-bd {
+        padding: 14px 18px 18px;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .al .card-ttl {
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--ink-1);
+        margin: 0;
+      }
+      .al .card-sub {
+        font-size: 0.75rem;
+        color: var(--ink-3);
+      }
+
+      /* ── toolbar ──────────────────────────────────────────────────── */
+      /* Three fixed slots: heading left, period controls dead-centre, view
+         toggle hard right. The two flanking columns are equal fractions so
+         the middle slot is centred on the page, not on whatever the heading
+         happens to be wide. The period controls are the overview's only
+         occupant of that middle slot, and they carry .d-none → display:none
+         in the overview, where no date range is read. */
+      .al-bar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: end;
+        gap: 16px;
+        padding: 2px 2px 18px;
+      }
+      .al-bar > .al-head {
+        grid-column: 1;
+        justify-self: start;
+      }
+      .al-bar > .al-controls {
+        grid-column: 2;
+        justify-self: center;
+      }
+      .al-bar > .view-seg {
+        grid-column: 3;
+        justify-self: end;
+      }
+      /* Not enough width for three abreast — fall back to wrapping rows with
+         the toggle still trailing at the right edge. */
+      @media (max-width: 1180px) {
+        .al-bar {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: flex-end;
+          justify-content: space-between;
+        }
+        .al-bar > .al-controls {
+          order: 3;
+        }
+        .al-bar > .view-seg {
+          order: 2;
+        }
+      }
+      .al-title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        color: var(--ink-1);
+        margin: 0;
+        line-height: 1.15;
+      }
+      .al-title .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        margin-right: 10px;
+        vertical-align: 4px;
+      }
+      .al-caption {
+        font-size: 0.82rem;
+        color: var(--ink-2);
+        margin-top: 4px;
+      }
+      .al-caption strong {
+        color: var(--ink-1);
+        font-weight: 700;
+      }
+
+      .al-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* segmented period control */
+      .seg {
+        display: inline-flex;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px;
+        box-shadow: var(--shadow-1);
+      }
+      .seg button {
+        border: 0;
+        background: transparent;
+        color: var(--ink-2);
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 6px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .seg button:hover {
+        background: var(--sunken);
+        color: var(--ink-1);
+      }
+      .seg button.active {
+        background: var(--brand);
+        color: #fff;
+      }
+
+      /* ── date range picker ────────────────────────────────────────────
+         One calendar, two months, both ends chosen on it. Two native date
+         inputs used to sit here; they made the user type two dates with no
+         sense of the span between them, and gave no feedback until Apply.
+         Here the band between the ends is drawn as you move, so the range
+         is visible before it is committed. */
+      .dp {
+        position: relative;
+      }
+      .dp-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        box-shadow: var(--shadow-1);
+        color: var(--ink-1);
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 8px 14px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .dp-trigger:hover {
+        border-color: var(--brand);
+      }
+      .dp-trigger .fa-calendar {
+        color: var(--brand);
+      }
+      .dp-caret {
+        font-size: 0.62rem;
+        color: var(--ink-3);
+        transition: transform 0.15s;
+      }
+      .dp.open .dp-trigger {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 3px rgba(46, 79, 111, 0.12);
+      }
+      .dp.open .dp-caret {
+        transform: rotate(180deg);
+      }
+
+      .dp-pop {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 60;
+        width: 620px;
+        max-width: min(92vw, 620px);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--r-lg);
+        box-shadow: var(--shadow-2);
+        overflow: hidden;
+      }
+      .dp-pop[hidden] {
+        display: none;
+      }
+
+      .dp-head {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: stretch;
+        gap: 10px;
+        padding: 14px;
+        background: var(--sunken);
+        border-bottom: 1px solid var(--line);
+      }
+      /* Both ends are re-rendered on every click, and their text swaps between
+         a placeholder and a date. The box must not resize while that happens,
+         so its height is fixed rather than left to the content: the label and
+         value carry explicit line-heights, and the icon occupies a reserved
+         square instead of whatever line box its glyph produces. */
+      .dp-head .dp-field {
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
+        height: 56px;
+        min-height: 56px;
+        max-height: 56px;
+        line-height: 1;
+        text-align: left;
+        background: var(--card);
+        border: 2px solid var(--line);
+        border-radius: var(--r-md);
+        padding: 8px 12px;
+        cursor: pointer;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .dp-field i {
+        flex: 0 0 16px;
+        width: 16px;
+        font-size: 0.95rem;
+        line-height: 1;
+        text-align: center;
+        color: var(--ink-3);
+      }
+      /* Ellipsis needs the text column to be allowed to shrink. */
+      .dp-field > span {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .dp-field small {
+        display: block;
+        font-size: 0.64rem;
+        line-height: 14px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+      .dp-field b {
+        display: block;
+        font-size: 0.82rem;
+        line-height: 20px;
+        font-weight: 600;
+        color: var(--ink-1);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* Placeholder vs. a real date differs in colour only. Changing the weight
+         here too swapped the rendered face when the family has no 500, and the
+         two ends stopped matching — colour alone reads as "not set yet". */
+      .dp-field.empty b {
+        color: var(--ink-3);
+      }
+      /* The lit field is what the next click on the calendar will fill. */
+      .dp-field.active {
+        border-color: var(--brand);
+      }
+      .dp-field.active i {
+        color: var(--brand);
+      }
+
+      .dp-body {
+        position: relative;
+        padding: 16px 18px 6px;
+      }
+      .dp-nav {
+        position: absolute;
+        top: 12px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink-2);
+        font-size: 0.7rem;
+        cursor: pointer;
+        z-index: 1;
+      }
+      .dp-nav:hover:not(:disabled) {
+        border-color: var(--brand);
+        color: var(--brand);
+      }
+      .dp-nav:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .dp-nav.prev {
+        left: 12px;
+      }
+      .dp-nav.next {
+        right: 12px;
+      }
+      .dp-months {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 26px;
+      }
+      .dp-mtitle {
+        text-align: center;
+        font-size: 0.84rem;
+        font-weight: 700;
+        color: var(--ink-1);
+        margin-bottom: 10px;
+      }
+      /* A month spans four to six week rows depending on where the 1st falls,
+         which would make the whole popup grow and shrink as you page through
+         months or pick the second date. Six rows are always laid out (the JS
+         pads the tail with blanks), so the panel keeps one height. */
+      .dp-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        grid-template-rows: auto repeat(6, 38px);
+      }
+      .dp-dow {
+        text-align: center;
+        font-size: 0.66rem;
+        font-weight: 700;
+        color: var(--ink-3);
+        padding-bottom: 6px;
+      }
+      /* The cell carries the range band; the button inside carries the day.
+         Keeping them separate is what lets the band run edge to edge while
+         the endpoints stay circular. */
+      .dp-cell {
+        position: relative;
+        display: grid;
+        place-items: center;
+        padding: 2px 0;
+      }
+      .dp-cell.in {
+        background: var(--data-soft);
+      }
+      .dp-cell.start {
+        border-radius: 999px 0 0 999px;
+      }
+      .dp-cell.end {
+        border-radius: 0 999px 999px 0;
+      }
+      .dp-cell.start.end {
+        border-radius: 999px;
+      }
+      .dp-day {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--ink-1);
+        font-size: 0.79rem;
+        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+        line-height: 1;
+      }
+      .dp-day:hover {
+        background: var(--brand-soft);
+      }
+      .dp-day:disabled {
+        color: var(--ink-3);
+        opacity: 0.4;
+        cursor: default;
+        background: transparent;
+      }
+      .dp-cell.today .dp-day {
+        box-shadow: inset 0 0 0 1px var(--ink-3);
+      }
+      .dp-cell.start .dp-day,
+      .dp-cell.end .dp-day {
+        background: var(--brand);
+        color: #fff;
+        font-weight: 700;
+      }
+      .dp-cell.blank {
+        pointer-events: none;
+      }
+
+      .dp-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--line);
+        background: var(--sunken);
+      }
+      .dp-foot-r {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+      }
+      /* The hint rewrites itself at each step of the selection; keep it on one
+         line so the footer doesn't change height mid-pick. */
+      .dp-hint {
+        font-size: 0.74rem;
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+      .dp-link {
+        border: 0;
+        background: transparent;
+        color: var(--ink-2);
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 6px 4px;
+      }
+      .dp-link:hover {
+        color: var(--brand);
+      }
+      .btn-pill:disabled {
+        opacity: 0.45;
+        cursor: default;
+        filter: none;
+      }
+
+      @media (max-width: 720px) {
+        .dp-pop {
+          right: auto;
+          left: 0;
+        }
+        .dp-months {
+          grid-template-columns: 1fr;
+          gap: 18px;
+        }
+      }
+      .btn-pill {
+        border: 0;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 7px 15px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: filter 0.15s;
+      }
+      .btn-pill:hover {
+        filter: brightness(0.94);
+      }
+      .btn-pill.solid {
+        background: var(--brand);
+        color: #fff;
+      }
+      .btn-pill.ghost {
+        background: var(--card);
+        color: var(--ink-1);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow-1);
+      }
+
+      /* ── KPI tiles ────────────────────────────────────────────────── */
+      /* Nine tiles never pack evenly into an auto-fill grid — it leaves a
+         ragged hole in the last row. Fixed column counts plus a hero tile
+         that spans the remainder give a full rectangle at every breakpoint:
+         2 cols → hero(2)+8 = 5 rows · 4 cols → hero(4)+8 = 3 rows ·
+         5 cols → hero(2)+8 = 2 rows. */
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .kpi.hero {
+        grid-column: span 2;
+      }
+      @media (min-width: 900px) {
+        .kpi-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .kpi.hero {
+          grid-column: span 4;
+        }
+      }
+      @media (min-width: 1400px) {
+        .kpi-grid {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+        .kpi.hero {
+          grid-column: span 2;
+        }
+      }
+      /* The one hero figure on the page. */
+      .kpi.hero {
+        background: linear-gradient(180deg, #fff 0%, var(--brand-soft) 320%);
+      }
+      .kpi.hero .kpi-value {
+        font-size: 2.6rem;
+      }
+      .kpi.hero .kpi-icon {
+        width: 38px;
+        height: 38px;
+        font-size: 1rem;
+      }
+      .kpi {
+        position: relative;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--r-md);
+        padding: 14px 15px 12px;
+        cursor: pointer;
+        box-shadow: var(--shadow-1);
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s,
+          transform 0.15s;
+        overflow: hidden;
+      }
+      .kpi::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 3px;
+        background: var(--kpi-c, var(--brand));
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      .kpi:hover {
+        border-color: var(--line-soft);
+        box-shadow: var(--shadow-2);
+        transform: translateY(-2px);
+      }
+      .kpi.active {
+        border-color: var(--kpi-c, var(--brand));
+      }
+      .kpi.active::after {
+        opacity: 1;
+      }
+      .kpi-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .kpi-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--ink-3);
+        line-height: 1.35;
+      }
+      /* Proportional figures — tabular-nums makes big numbers look loose. */
+      .kpi-value {
+        font-size: 1.85rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        color: var(--ink-1);
+        margin-top: 6px;
+      }
+      .kpi-icon {
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--r-sm);
+        display: grid;
+        place-items: center;
+        font-size: 0.85rem;
+        background: var(--kpi-bg, var(--brand-soft));
+        color: var(--kpi-ink, var(--brand));
+      }
+      .kpi-share {
+        margin-top: 10px;
+        font-size: 0.7rem;
+        color: var(--ink-3);
+      }
+      .kpi-meter {
+        height: 3px;
+        border-radius: 2px;
+        background: var(--line-soft);
+        margin-top: 5px;
+        overflow: hidden;
+      }
+      .kpi-meter > i {
+        display: block;
+        height: 100%;
+        border-radius: 2px;
+        background: var(--kpi-c, var(--brand));
+      }
+
+      /* ── board: the card layout both views use ────────────────────── */
+      /* Two independent stacks rather than a grid of rows. These cards are
+         list- and chart-driven, so their heights differ by hundreds of
+         pixels; in a grid every row is as tall as its tallest card, which
+         left a dead well beside every short one. Stacked, each card sits
+         directly under the one before it and the only slack is at the foot
+         of the shorter column — so the cards are dealt between the columns
+         to keep the two stacks about level.
+
+         Which card lands in which stack is NOT fixed in the markup — card
+         heights are data-driven, so any fixed split is balanced for one shape
+         of data and leaves a well under the shorter stack for every other.
+         `balanceBoard()` deals them at runtime into whichever column is
+         shorter at that moment; the markup order is only the fallback and the
+         reading order. The one card that needs the room (the chart, the stage
+         funnel) pins itself to the wide column with data-pin="wide". */
+      .board {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+        align-items: start;
+      }
+      .board-col {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+      @media (max-width: 1100px) {
+        .board {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+
+      /* fixed height INCLUDES the x-axis band, so the card never scrolls */
+      .chart-wrap {
+        position: relative;
+        height: 300px;
+      }
+      /* An empty plot with a meaningless 0–1 axis says less than nothing. */
+      .chart-empty {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+      }
+
+      /* ── bar lists (area split + leaderboards) ────────────────────── */
+      .bl {
+        display: flex;
+        flex-direction: column;
+      }
+      .bl-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 2px 10px;
+        padding: 5px 6px;
+        margin: 0 -6px;
+        border-radius: var(--r-sm);
+        align-items: baseline;
+      }
+      .bl-row.clickable {
+        cursor: pointer;
+      }
+      .bl-row.clickable:hover {
+        background: var(--sunken);
+      }
+      .bl-name {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--ink-1);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+      }
+      .bl-name span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .bl-val {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--ink-1);
+        font-variant-numeric: tabular-nums;
+      }
+      .bl-track {
+        grid-column: 1 / -1;
+        height: 6px;
+        background: var(--line-soft);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 3px;
+      }
+      .bl-fill {
+        height: 100%;
+        border-radius: 3px;
+        background: var(--bar-c, var(--data));
+        min-width: 3px;
+      }
+      .bl-sub {
+        grid-column: 1 / -1;
+        font-size: 0.71rem;
+        color: var(--ink-3);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-top: 3px;
+      }
+      .dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--dot-c, var(--s0));
+      }
+
+      /* ── assembly coverage ────────────────────────────────────────── */
+      /* The denominator this card exists for. Everything under it is drawn
+         with the same bar-list parts as the panels above, so the two meters
+         read on the same scale the reader has already learned. */
+      .cov-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .cov-total {
+        font-size: 1.85rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        color: var(--ink-1);
+      }
+      .cov-total-lbl {
+        font-size: 0.72rem;
+        color: var(--ink-3);
+        margin-top: 3px;
+      }
+      .cov-sep {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--ink-3);
+        margin: 14px 0 8px;
+        padding-top: 13px;
+        border-top: 1px solid var(--line-soft);
+      }
+
+      /* ── feed ─────────────────────────────────────────────────────── */
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 18px;
+        background: var(--sunken);
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      .al select.form-select,
+      .al input.form-control {
+        font-size: 0.78rem;
+        border-radius: var(--r-sm);
+        border-color: var(--line);
+        color: var(--ink-1);
+        padding: 6px 28px 6px 10px;
+        background-color: var(--card);
+      }
+      .al input.form-control {
+        padding-right: 10px;
+      }
+      .al select.form-select:focus,
+      .al input.form-control:focus {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 3px rgba(46, 79, 111, 0.12);
+      }
+
+      .al table.feed {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin: 0;
+      }
+      .al table.feed thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--card);
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--ink-3);
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+        text-align: left;
+      }
+      .al table.feed tbody td {
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line-soft);
+        vertical-align: top;
+        font-size: 0.83rem;
+      }
+      .al table.feed tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      .al table.feed tbody tr:hover td {
+        background: var(--sunken);
+      }
+      .cell-strong {
+        font-weight: 600;
+        color: var(--ink-1);
+        line-height: 1.35;
+      }
+      .cell-sub {
+        font-size: 0.75rem;
+        color: var(--ink-3);
+        line-height: 1.4;
+        margin-top: 2px;
+      }
+      .cell-time {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px 3px 7px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        white-space: nowrap;
+        background: var(--chip-bg, var(--sunken));
+        color: var(--chip-ink, var(--ink-2));
+      }
+      .chip-clear {
+        cursor: pointer;
+        opacity: 0.65;
+      }
+      .chip-clear:hover {
+        opacity: 1;
+      }
+      .tag-hist {
+        font-size: 0.66rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--ink-3);
+        background: var(--sunken);
+        border-radius: 4px;
+        padding: 1px 5px;
+        margin-left: 6px;
+        vertical-align: 1px;
+      }
+      .avatar {
+        flex: 0 0 28px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--brand-soft);
+        color: var(--brand);
+        font-size: 0.68rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .feed-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 18px;
+        border-top: 1px solid var(--line);
+        font-size: 0.76rem;
+        color: var(--ink-3);
+      }
+      .pager {
+        display: inline-flex;
+        gap: 6px;
+      }
+      .pager button {
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink-1);
+        border-radius: var(--r-sm);
+        font-size: 0.76rem;
+        font-weight: 600;
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+      .pager button:disabled {
+        color: var(--ink-3);
+        cursor: default;
+        background: var(--sunken);
+      }
+      .pager button:not(:disabled):hover {
+        border-color: var(--brand);
+        color: var(--brand);
+      }
+
+      /* Refetch holds the previous render at reduced opacity — no skeleton
+         flash, no layout jump. */
+      .is-loading {
+        opacity: 0.45;
+        pointer-events: none;
+        transition: opacity 0.15s;
+      }
+
+      .empty {
+        text-align: center;
+        padding: 44px 20px;
+        color: var(--ink-3);
+      }
+      .empty i {
+        font-size: 1.6rem;
+        opacity: 0.5;
+        display: block;
+        margin-bottom: 10px;
+      }
+      .empty .empty-t {
+        font-weight: 700;
+        color: var(--ink-2);
+        font-size: 0.88rem;
+      }
+
+      .muted {
+        color: var(--ink-3);
+        font-size: 0.78rem;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════
+         Project overview — the second view of this page.
+
+         The activity log answers "what happened in this window"; the overview
+         answers "where does everything stand right now". It is a MODE, not a
+         filter, so the switch between them is styled as a mode switch (a
+         sunken track with the live view lifted out of it) and never looks
+         like the period pills next to it.
+         ══════════════════════════════════════════════════════════════════ */
+      .view-seg {
+        background: var(--brand-soft);
+        border-color: transparent;
+        box-shadow: none;
+      }
+      .view-seg button {
+        color: var(--brand);
+        padding: 7px 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .view-seg button:hover {
+        background: rgba(255, 255, 255, 0.55);
+        color: var(--brand);
+      }
+      .view-seg button.active {
+        background: var(--card);
+        color: var(--ink-1);
+        box-shadow: var(--shadow-1);
+      }
+
+      /* Five tiles, the first spanning two columns → 6 cells. The column count
+         is chosen at each breakpoint so 6 always divides evenly: 2 / 3 / 6.
+         No ragged last row at any width. */
+      .ov-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .ov-grid .kpi.hero {
+        grid-column: span 2;
+      }
+      @media (min-width: 900px) {
+        .ov-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+      @media (min-width: 1280px) {
+        .ov-grid {
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+      }
+      /* Overview tiles report; they don't filter. Nothing about them should
+         invite a click. */
+      .kpi.static {
+        cursor: default;
+      }
+      .kpi.static:hover {
+        transform: none;
+        box-shadow: var(--shadow-1);
+        border-color: var(--line);
+      }
+
+      /* ── stage funnel ─────────────────────────────────────────────── */
+      .fn {
+        display: flex;
+        flex-direction: column;
+      }
+      .fn-row {
+        display: grid;
+        grid-template-columns: 14px minmax(0, 1fr) auto;
+        gap: 3px 10px;
+        align-items: baseline;
+        padding: 8px;
+        margin: 0 -8px;
+        border-radius: var(--r-sm);
+        cursor: pointer;
+      }
+      .fn-row:hover {
+        background: var(--sunken);
+      }
+      /* An empty stage still earns its row — "nothing is stuck at Finance" is
+         information, and a funnel with rows missing can't be read week to
+         week. It just steps back visually. */
+      .fn-row.zero {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .fn-row.zero:hover {
+        background: transparent;
+      }
+      .fn-caret {
+        grid-column: 1;
+        font-size: 0.62rem;
+        color: var(--ink-3);
+        transition: transform 0.15s;
+      }
+      .fn-row.open .fn-caret {
+        transform: rotate(90deg);
+      }
+      .fn-name {
+        grid-column: 2;
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: var(--ink-1);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .fn-count {
+        grid-column: 3;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--ink-1);
+        font-variant-numeric: tabular-nums;
+      }
+      .fn-meta {
+        grid-column: 2 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.71rem;
+        color: var(--ink-3);
+      }
+      .fn-track {
+        grid-column: 2 / -1;
+        height: 6px;
+        background: var(--line-soft);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 3px;
+      }
+      .fn-fill {
+        height: 100%;
+        border-radius: 3px;
+        background: var(--fn-c, var(--data));
+      }
+      .fn-panel {
+        grid-column: 2 / -1;
+        display: none;
+        margin-top: 9px;
+        padding-left: 2px;
+      }
+      .fn-row.open .fn-panel {
+        display: block;
+      }
+
+      /* ── project rows (drill-downs, attention list) ───────────────── */
+      .pl-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 2px 10px;
+        align-items: center;
+        padding: 7px 10px;
+        border-radius: var(--r-sm);
+        background: var(--sunken);
+      }
+      .pl-row + .pl-row {
+        margin-top: 5px;
+      }
+      .pl-no {
+        font-size: 0.79rem;
+        font-weight: 700;
+        color: var(--ink-1);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pl-sub {
+        grid-column: 1 / -1;
+        font-size: 0.7rem;
+        color: var(--ink-3);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pl-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        white-space: nowrap;
+        background: var(--pill-bg, var(--sunken));
+        color: var(--pill-ink, var(--ink-2));
+      }
+      .pl-row .pill {
+        background: var(--pill-bg, var(--card));
+      }
+
+      /* One-line callout above a list — e.g. approvals waiting on a Director. */
+      .note {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 11px;
+        border-radius: var(--r-sm);
+        font-size: 0.76rem;
+        font-weight: 600;
+        background: var(--note-bg, var(--brand-soft));
+        color: var(--note-ink, var(--brand));
+        margin-bottom: 10px;
+      }
+
+      @media (max-width: 640px) {
+        .al-title {
+          font-size: 1.3rem;
+        }
+        .kpi-value {
+          font-size: 1.5rem;
+        }
+        .kpi-grid {
+          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        }
+        .filters > * {
+          flex: 1 1 140px;
+        }
+      }
+    </style>
+  </head>
+
+  <body class="index-page">
+    <header
+      id="header"
+      class="header sticky-top"
+      style="
+        background-color: #fff;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: 10px 0;
+      "
+    >
+      <nav class="navbar navbar-light">
+        <div class="container-fluid d-flex flex-wrap align-items-center">
+          <a class="navbar-brand" href="ourClients.html">
+            <img src="assets/img/YDLOGO.png" alt="Logo" style="height: 45px" />
+          </a>
+
+          <div class="custom-nav-container">
+            <a
+              href="projectReport.html"
+              class="nav-btn-custom"
+              style="background: #fde2e4; color: #9f1239"
+            >
+              Report
+            </a>
+            <a
+              href="meetings.html"
+              class="nav-btn-custom"
+              style="background: #fff4cc; color: #92400e"
+            >
+              Meeting
+            </a>
+            <a
+              href="kickOff.html"
+              class="nav-btn-custom"
+              style="background: #baf1ac; color: #3f891b"
+              >YD Ascend
+            </a>
+            <a
+              href="#"
+              class="nav-btn-custom"
+              style="background: #e0f2fe; color: #0369a1"
+              data-bs-toggle="modal"
+              data-bs-target="#attendanceModal"
+            >
+              Attendance
+            </a>
+          </div>
+
+          <div class="right-icons-group">
+            <a
+              href="ourClients.html"
+              class="position-relative text-decoration-none"
+            >
+              <i
+                class="fa-solid fa-bell fa-lg"
+                style="color: #4167a7; font-size: 1.5rem"
+              ></i>
+              <span
+                id="unreadCount"
+                class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                style="font-size: 10px; padding: 3px 6px"
+              ></span>
+            </a>
+
+            <div class="dropdown">
+              <button
+                class="btn-user-blue dropdown-toggle"
+                type="button"
+                id="userDropdown"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+              >
+                <img
+                  src="assets/img/user.png"
+                  height="20px"
+                  style="filter: brightness(0) invert(1)"
+                  alt="User"
+                />
+                <span id="engineerNameDisplay" class="d-none d-sm-inline"
+                  >User</span
+                >
+              </button>
+              <ul
+                class="dropdown-menu dropdown-menu-end shadow"
+                aria-labelledby="userDropdown"
+              >
+                <li>
+                  <a class="dropdown-item" href="changePassword.html"
+                    >Change Password</a
+                  >
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <a class="dropdown-item text-danger" onclick="logout()"
+                    >Logout</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="main">
+      <section id="hero" class="hero section"></section>
+      <section id="contact" class="contact section">
+        <div class="al">
+          <div class="al-shell">
+            <!-- ── Unreachable state ─────────────────────────────────────
+                 The page is open to every signed-in user, so this is no
+                 longer a permission wall: it is what you see when the server
+                 can't be reached or refuses the request. -->
+            <div id="deniedBox" class="d-none">
+              <div class="card-x">
+                <div class="empty" style="padding: 64px 20px">
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                  <div class="empty-t">Couldn't load the Activity Log</div>
+                  <p class="muted mt-1 mb-3">
+                    The server didn't respond. Refresh the page, and if it keeps
+                    failing sign in again.
+                  </p>
+                  <a href="kickOff.html" class="btn-pill ghost">
+                    Back to Kick Off Projects
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div id="pageBody">
+              <!-- ── Title + period controls ──────────────────────────── -->
+              <div class="al-bar">
+                <div class="al-head">
+                  <h1 class="al-title">
+                    <i class="dot"></i><span id="pageTitle">Activity Log</span>
+                  </h1>
+                  <div class="al-caption" id="rangeCaption">Loading…</div>
+                </div>
+
+                <!-- Period picking belongs to the log only. The overview is a
+                     snapshot of today, so it hides these entirely rather than
+                     showing controls that change almost nothing on it. -->
+                <div class="al-controls" id="periodControls">
+                  <div class="seg" role="group" aria-label="Period">
+                    <button class="preset-btn" data-preset="today">
+                      Today
+                    </button>
+                    <button class="preset-btn active" data-preset="week">
+                      Week
+                    </button>
+                    <button class="preset-btn" data-preset="month">
+                      Month
+                    </button>
+                    <button class="preset-btn" data-preset="quarter">
+                      Quarter
+                    </button>
+                    <button class="preset-btn" data-preset="year">Year</button>
+                  </div>
+
+                  <!-- Range picker. One calendar, two months, both ends
+                       chosen on it — see the `dp` controller in the script. -->
+                  <div class="dp" id="datePicker">
+                    <button
+                      class="dp-trigger"
+                      id="dpTrigger"
+                      type="button"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                    >
+                      <i class="fa-regular fa-calendar"></i>
+                      <span id="dpLabel">Pick dates</span>
+                      <i class="fa-solid fa-chevron-down dp-caret"></i>
+                    </button>
+
+                    <div
+                      class="dp-pop"
+                      id="dpPop"
+                      role="dialog"
+                      aria-label="Choose a date range"
+                      hidden
+                    >
+                      <!-- The two ends of the range, as fields. The lit one is
+                           what the next click on the calendar will set — the
+                           same cue the user already knows from flight search. -->
+                      <div class="dp-head">
+                        <button
+                          type="button"
+                          class="dp-field"
+                          id="dpFromField"
+                          data-which="from"
+                        >
+                          <i class="fa-regular fa-calendar"></i>
+                          <span>
+                            <small>Start</small>
+                            <b id="dpFromTxt">Start date</b>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          class="dp-field"
+                          id="dpToField"
+                          data-which="to"
+                        >
+                          <i class="fa-regular fa-calendar"></i>
+                          <span>
+                            <small>End</small>
+                            <b id="dpToTxt">End date</b>
+                          </span>
+                        </button>
+                      </div>
+
+                      <div class="dp-body">
+                        <button
+                          type="button"
+                          class="dp-nav prev"
+                          id="dpPrev"
+                          aria-label="Previous month"
+                        >
+                          <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="dp-nav next"
+                          id="dpNext"
+                          aria-label="Next month"
+                        >
+                          <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                        <div class="dp-months" id="dpMonths"></div>
+                      </div>
+
+                      <div class="dp-foot">
+                        <button type="button" class="dp-link" id="dpReset">
+                          Reset
+                        </button>
+                        <div class="dp-foot-r">
+                          <span class="dp-hint" id="dpHint"></span>
+                          <button
+                            type="button"
+                            class="btn-pill solid"
+                            id="dpApply"
+                            disabled
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- <button id="exportBtn" class="btn-pill ghost">
+                    <i class="fa-solid fa-arrow-down-to-line"></i>&nbsp;Export
+                  </button> -->
+                </div>
+
+                <!-- Two views of the same data set: what happened (log) and
+                     where things stand (overview). Kept last so it holds the
+                     right edge in both views. -->
+                <div class="seg view-seg" role="group" aria-label="View">
+                  <button class="view-btn active" data-view="activity">
+                    <i class="fa-solid fa-list-ul"></i>Activity Log
+                  </button>
+                  <button class="view-btn" data-view="overview">
+                    <i class="fa-solid fa-diagram-project"></i>Project Overview
+                  </button>
+                </div>
+              </div>
+
+              <!-- ══ VIEW 1 — Activity Log ═══════════════════════════════ -->
+              <div id="activityView">
+              <!-- ── Headline tiles ───────────────────────────────────── -->
+              <div class="kpi-grid" id="kpiRow"></div>
+
+              <!-- ── Trend, areas and leaderboards ────────────────────── -->
+              <!-- Wide column: the chart, then who did the work. Narrow one
+                   takes the two breakdowns of what the work was. Dealt this
+                   way the stacks come out about level, so neither leaves a
+                   well beside the other. -->
+              <div class="board">
+                <div class="board-col">
+                  <!-- The only card that needs the wide column; everything
+                       else is dealt to whichever stack is shorter. -->
+                  <section class="card-x" data-pin="wide">
+                    <div class="card-hd">
+                      <h2 class="card-ttl">Activity over time</h2>
+                      <span class="card-sub" id="trendUnit"></span>
+                    </div>
+                    <div class="card-bd">
+                      <div class="chart-wrap">
+                        <canvas id="trendChart"></canvas>
+                        <div id="trendEmpty" class="chart-empty d-none">
+                          <div class="empty">
+                            <i class="fa-regular fa-chart-bar"></i>
+                            <div class="empty-t">Nothing yet</div>
+                            <div class="muted mt-1">
+                              No activity recorded in this period.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="card-x">
+                    <div class="card-hd">
+                      <h2 class="card-ttl">Most active people</h2>
+                    </div>
+                    <div class="card-bd">
+                      <div id="topUsers" class="bl"></div>
+                    </div>
+                  </section>
+
+                  <section class="card-x">
+                    <div class="card-hd">
+                      <h2 class="card-ttl">Most active departments</h2>
+                    </div>
+                    <div class="card-bd">
+                      <div id="topDepartments" class="bl"></div>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="board-col">
+                  <section class="card-x">
+                    <div class="card-hd">
+                      <h2 class="card-ttl">Activity by area</h2>
+                      <!-- <span class="card-sub">click to filter</span> -->
+                    </div>
+                    <div class="card-bd">
+                      <div id="areaBars" class="bl"></div>
+                    </div>
+                  </section>
+
+                  <!-- The denominator for the two upload tiles above: those
+                       count uploads inside the period, this counts how much
+                       of the whole book is covered. It reads no date range —
+                       hence "as of today" on the card. -->
+                  <section class="card-x">
+                    <div class="card-hd">
+                      <h2 class="card-ttl">Drawing &amp; BOM coverage</h2>
+                      <span class="card-sub">as of today</span>
+                    </div>
+                    <div class="card-bd">
+                      <div id="asmCoverage"></div>
+                    </div>
+                  </section>
+
+                  <section class="card-x">
+                    <div class="card-hd">
+                      <h2 class="card-ttl">Busiest projects</h2>
+                    </div>
+                    <div class="card-bd">
+                      <div id="topProjects" class="bl"></div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+
+              <!-- ── Feed ─────────────────────────────────────────────── -->
+              <section class="card-x">
+                <div class="card-hd" style="padding-bottom: 14px">
+                  <div class="d-flex align-items-center flex-wrap gap-2">
+                    <h2 class="card-ttl">Every activity</h2>
+                    <span class="card-sub" id="feedCount"></span>
+                    <span id="kpiChip" class="d-none"></span>
+                  </div>
+                </div>
+
+                <div class="filters">
+                  <select id="fCategory" class="form-select" style="width: 150px">
+                    <option value="all">All areas</option>
+                  </select>
+                  <select id="fAction" class="form-select" style="width: 190px">
+                    <option value="all">All activity types</option>
+                  </select>
+                  <select id="fUser" class="form-select" style="width: 170px">
+                    <option value="all">All people</option>
+                  </select>
+                  <input
+                    id="fSearch"
+                    type="search"
+                    class="form-control"
+                    placeholder="Search project, person, detail…"
+                    style="width: 230px"
+                  />
+                  <select id="fLimit" class="form-select" style="width: 105px">
+                    <option value="50">50 / page</option>
+                    <option value="100">100 / page</option>
+                    <option value="250">250 / page</option>
+                  </select>
+                </div>
+
+                <div id="feedWrap" style="overflow-x: auto">
+                  <table id="feedTable" class="feed">
+                    <thead>
+                      <tr>
+                        <th style="width: 118px">When</th>
+                        <th style="width: 150px">Area</th>
+                        <th>Activity</th>
+                        <th style="width: 180px">Project</th>
+                        <th style="width: 200px">By</th>
+                      </tr>
+                    </thead>
+                    <tbody id="feedBody"></tbody>
+                  </table>
+                </div>
+
+                <div class="feed-foot">
+                  <span id="pageInfo"></span>
+                  <div class="pager">
+                    <button id="prevPage">
+                      <i class="fa-solid fa-chevron-left"></i> Prev
+                    </button>
+                    <button id="nextPage">
+                      Next <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                  </div>
+                </div>
+              </section>
+              </div>
+              <!-- ══ /VIEW 1 ═════════════════════════════════════════════ -->
+
+              <!-- ══ VIEW 2 — Project Overview ═══════════════════════════ -->
+              <div id="overviewView" class="d-none">
+                <!-- Headline counts. These are all as-of-now — they ignore
+                     the period picked at the top of the page. -->
+                <div class="ov-grid" id="ovKpis"></div>
+
+                <!-- Wide column: the pipeline, plus the team split that reads
+                     as its summary. Expanding a stage grows this column only,
+                     instead of reflowing the whole board. -->
+                <div class="board">
+                  <div class="board-col">
+                    <!-- Thirteen stage rows plus their drill-downs; this one
+                         keeps the wide column, the rest are dealt. -->
+                    <section class="card-x" data-pin="wide">
+                      <div class="card-hd">
+                        <h2 class="card-ttl">
+                          Project pipeline — where every project stands
+                        </h2>
+                        <span class="card-sub">click a stage to list it</span>
+                      </div>
+                      <div class="card-bd">
+                        <div id="ovFunnel" class="fn"></div>
+                      </div>
+                    </section>
+
+                    <section class="card-x">
+                      <div class="card-hd">
+                        <h2 class="card-ttl">Waiting on which team</h2>
+                      </div>
+                      <div class="card-bd">
+                        <div id="ovOwners" class="bl"></div>
+                      </div>
+                    </section>
+                  </div>
+
+                  <div class="board-col">
+                    <section class="card-x">
+                      <div class="card-hd">
+                        <h2 class="card-ttl">Needs attention</h2>
+                        <span class="card-sub">past its stage SLA</span>
+                      </div>
+                      <div class="card-bd"><div id="ovAttention"></div></div>
+                    </section>
+
+                    <section class="card-x">
+                      <div class="card-hd">
+                        <h2 class="card-ttl">Project manager load</h2>
+                      </div>
+                      <div class="card-bd">
+                        <div id="ovManagers" class="bl"></div>
+                      </div>
+                    </section>
+
+                    <section class="card-x">
+                      <div class="card-hd">
+                        <h2 class="card-ttl">Projects per client</h2>
+                      </div>
+                      <div class="card-bd">
+                        <div id="ovClients" class="bl"></div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </div>
+              <!-- ══ /VIEW 2 ═════════════════════════════════════════════ -->
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer id="footer" class="footer position-relative light-background">
+      <div class="container copyright text-center">
+        <p>
+          © <span>Copyright</span>
+          <strong class="px-1 sitename">YOGIJI DIGI</strong>
+          <span>All Rights Reserved</span>
+        </p>
+      </div>
+    </footer>
+
+    <!-- Punch In / Punch Out — same modal every other page carries; the
+         button in the header opens it and assets/js/attendance.js drives it. -->
+    <div
+      class="modal fade"
+      id="attendanceModal"
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h6 class="modal-title">Mark Attendance</h6>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body text-center">
+            <div
+              id="liveClock"
+              class="fs-1 fw-bold mb-3"
+              style="color: #ad283f"
+            >
+              00:00:00
+            </div>
+
+            <div class="mb-3 text-start">
+              <label class="form-label">Select Project</label>
+              <select id="projectSelect" class="form-select">
+                <option value="">-- Choose Project --</option>
+              </select>
+            </div>
+
+            <div id="attendanceStatus" class="mb-3 text-muted">
+              <p id="punchInTimeDisplay">Punch In: --:--</p>
+              <p id="punchOutTimeDisplay">Punch Out: --:--</p>
+            </div>
+
+            <div class="d-grid gap-2">
+              <button
+                id="attendanceBtn"
+                class="btn btn-success btn-lg"
+                onclick="handleAttendance()"
+              >
+                Punch In
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/approvals.js"></script>
+    <script src="assets/js/issues.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script src="assets/js/main.js"></script>
+    <script src="assets/js/workWeek.js"></script>
+    <script src="assets/js/attendance.js"></script>
+
+    <script>
+      const token = localStorage.getItem("token");
+
+      // Read a design token so JS and CSS can never disagree about a colour.
+      const ROOT = document.querySelector(".al");
+      const tok = (name) =>
+        getComputedStyle(ROOT).getPropertyValue(name).trim();
+
+      // ── area identity ───────────────────────────────────────────────────
+      // A FIXED slot per area — never assigned by rank, so filtering or a
+      // quiet week can't repaint the areas a reader has already learned.
+      // Only the eight busiest areas get a hue; the tail shares the neutral
+      // slot. Every chip carries its name, so colour is a scanning aid, not
+      // the identity channel.
+      const AREA_SLOT = {
+        Projects: 1,
+        LOE: 2,
+        Drawings: 3,
+        Payments: 4,
+        Approvals: 5,
+        Assignments: 6,
+        Meetings: 7,
+        "Technical Scope": 8,
+      };
+      const areaFill = (c) => tok(`--s${AREA_SLOT[c] ?? 0}`);
+      const areaInk = (c) => tok(`--s${AREA_SLOT[c] ?? 0}-ink`);
+
+      // The headline numbers Directors asked for by name. Each tile sums a
+      // set of action keys returned by /activity/summary.
+      const KPI_DEFS = [
+        {
+          key: "all",
+          label: "Total activities",
+          icon: "fa-bolt",
+          slot: null,
+          all: true,
+        },
+        {
+          key: "projects",
+          label: "Projects added",
+          icon: "fa-folder-plus",
+          slot: 1,
+          actions: ["project.create", "legacyProject.create"],
+        },
+        {
+          key: "pm",
+          label: "PMs assigned / changed",
+          icon: "fa-user-tie",
+          slot: 6,
+          actions: ["project.assignPM", "project.changePM"],
+        },
+        {
+          key: "payments",
+          label: "Payments / advances",
+          icon: "fa-indian-rupee-sign",
+          slot: 4,
+          actions: ["payment.decision", "payment.advanceReceived"],
+        },
+        {
+          key: "loe",
+          label: "LOE updates",
+          icon: "fa-file-lines",
+          slot: 2,
+          categories: ["LOE"],
+        },
+        {
+          key: "drawings",
+          label: "Drawing uploads",
+          icon: "fa-compass-drafting",
+          slot: 3,
+          // BOM deliberately excluded — it has its own tile below, and
+          // counting it here too would inflate this number.
+          actions: ["drawing.upload", "drawing.stage", "drawing.revisionUpload"],
+        },
+        {
+          key: "bom",
+          label: "BOM uploads",
+          icon: "fa-list-check",
+          slot: 7,
+          actions: ["bom.upload", "bom.subRowFile"],
+        },
+        {
+          key: "approvals",
+          label: "Approvals",
+          icon: "fa-circle-check",
+          slot: 5,
+          categories: ["Approvals"],
+        },
+        {
+          key: "meetings",
+          label: "Meetings & MOM",
+          icon: "fa-handshake",
+          slot: 8,
+          categories: ["Meetings"],
+        },
+      ];
+
+      // ── state ───────────────────────────────────────────────────────────
+      let range = null; // { from: Date, to: Date }
+      let kpiFilter = null; // the KPI tile currently drilled into, if any
+      let page = 1;
+      let trendChart = null;
+
+      const el = (id) => document.getElementById(id);
+      const escapeHtml = (s) =>
+        String(s ?? "").replace(
+          /[&<>"']/g,
+          (m) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[m],
+        );
+      const nf = (n) => Number(n || 0).toLocaleString("en-IN");
+
+      // Presets are computed in the browser so "This Week" means the viewer's
+      // week; the API only ever sees absolute instants.
+      function presetRange(preset) {
+        const now = new Date();
+        const to = new Date(now);
+        const from = new Date(now);
+        from.setHours(0, 0, 0, 0);
+        if (preset === "today") {
+          /* from = midnight today */
+        } else if (preset === "week") {
+          // Week starts Monday.
+          const dow = (from.getDay() + 6) % 7;
+          from.setDate(from.getDate() - dow);
+        } else if (preset === "month") {
+          from.setDate(1);
+        } else if (preset === "quarter") {
+          from.setMonth(from.getMonth() - 3);
+        } else if (preset === "year") {
+          from.setMonth(0, 1);
+        }
+        return { from, to };
+      }
+
+      function toInputValue(d) {
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+      }
+
+      // The tiles, charts and leaderboards always describe the WHOLE period —
+      // they are what you filter *from*, so they must not shrink to match the
+      // feed's filters (clicking a tile would otherwise zero out its siblings).
+      function rangeParams(extra = {}) {
+        return new URLSearchParams({
+          from: range.from.toISOString(),
+          to: range.to.toISOString(),
+          ...extra,
+        }).toString();
+      }
+
+      // The feed and the export are the drill-down: range + every filter,
+      // including a tile selection (which may name several actions at once).
+      function queryString(extra = {}) {
+        const params = new URLSearchParams({
+          from: range.from.toISOString(),
+          to: range.to.toISOString(),
+          category: kpiFilter?.categories
+            ? kpiFilter.categories.join(",")
+            : el("fCategory").value,
+          action: kpiFilter?.actions
+            ? kpiFilter.actions.join(",")
+            : el("fAction").value,
+          actorEmail: el("fUser").value,
+          q: el("fSearch").value.trim(),
+          ...extra,
+        });
+        return params.toString();
+      }
+
+      async function api(pathname, extra, qs = queryString) {
+        const res = await fetch(`${API_URL}/activity/${pathname}?${qs(extra)}`, {
+          headers: { Authorization: "Bearer " + token },
+        });
+        if (res.status === 401) {
+          const data = await res.json().catch(() => ({}));
+          handleUnauthorized(data.message);
+          throw new Error("unauthorized");
+        }
+        if (res.status === 403) {
+          showDenied();
+          throw new Error("forbidden");
+        }
+        return res.json();
+      }
+
+      function showDenied() {
+        el("pageBody").classList.add("d-none");
+        el("deniedBox").classList.remove("d-none");
+      }
+
+      // ── rendering ───────────────────────────────────────────────────────
+      function renderKpis(summary) {
+        const byAction = new Map(
+          summary.byAction.map((a) => [a.action, a.count]),
+        );
+        const byCategory = new Map(
+          summary.byCategory.map((c) => [c.category, c.count]),
+        );
+
+        el("kpiRow").innerHTML = KPI_DEFS.map((def) => {
+          let count = 0;
+          if (def.all) count = summary.total;
+          else if (def.actions)
+            count = def.actions.reduce((s, a) => s + (byAction.get(a) || 0), 0);
+          else if (def.categories)
+            count = def.categories.reduce(
+              (s, c) => s + (byCategory.get(c) || 0),
+              0,
+            );
+
+          const c = def.slot ? tok(`--s${def.slot}`) : tok("--brand");
+          const ink = def.slot ? tok(`--s${def.slot}-ink`) : tok("--brand");
+          const share = summary.total ? (count / summary.total) * 100 : 0;
+          const active = kpiFilter && kpiFilter.key === def.key;
+
+          return `
+            <div class="kpi${def.all ? " hero" : ""}${active ? " active" : ""}" data-kpi="${def.key}"
+                 style="--kpi-c:${c};--kpi-ink:${ink};--kpi-bg:${c}1f">
+              <div class="kpi-top">
+                <div>
+                  <div class="kpi-label">${def.label}</div>
+                  <div class="kpi-value">${nf(count)}</div>
+                </div>
+                <div class="kpi-icon"><i class="fa-solid ${def.icon}"></i></div>
+              </div>
+              ${
+                def.all
+                  ? `<div class="kpi-share">across ${summary.byCategory.length} area${summary.byCategory.length === 1 ? "" : "s"} · ${summary.byUser.length} people</div>`
+                  : `<div class="kpi-share">${share.toFixed(share < 10 ? 1 : 0)}% of all activity</div>
+                     <div class="kpi-meter"><i style="width:${Math.max(share, count ? 2 : 0)}%"></i></div>`
+              }
+            </div>`;
+        }).join("");
+
+        // Clicking a tile drills the feed into that slice. A tile can cover
+        // several actions ("Drawing uploads" = uploads + staged + revisions),
+        // which no single dropdown value can express — so the selection lives
+        // in `kpiFilter` and is shown as a chip above the table.
+        // Scoped to #kpiRow: the overview view renders `.kpi` tiles too, and
+        // those report rather than filter — they have no `data-kpi` to look up.
+        document.querySelectorAll("#kpiRow .kpi").forEach((node) => {
+          node.addEventListener("click", () => {
+            const def = KPI_DEFS.find((d) => d.key === node.dataset.kpi);
+            // Clicking the active tile (or "Total activities") clears it.
+            setKpiFilter(def.all || kpiFilter?.key === def.key ? null : def);
+            page = 1;
+            loadFeed();
+            el("feedTable").scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          });
+        });
+      }
+
+      // Applies a tile selection: highlights the tile, shows the chip, and
+      // resets the dropdowns so the two filter sources can't contradict.
+      function setKpiFilter(def) {
+        kpiFilter = def || null;
+        if (kpiFilter) {
+          el("fCategory").value = "all";
+          el("fAction").value = "all";
+        }
+        document
+          .querySelectorAll("#kpiRow .kpi")
+          .forEach((k) =>
+            k.classList.toggle(
+              "active",
+              !!kpiFilter && k.dataset.kpi === kpiFilter.key,
+            ),
+          );
+
+        const chip = el("kpiChip");
+        if (kpiFilter) {
+          const c = kpiFilter.slot ? tok(`--s${kpiFilter.slot}`) : tok("--brand");
+          const ink = kpiFilter.slot
+            ? tok(`--s${kpiFilter.slot}-ink`)
+            : tok("--brand");
+          chip.innerHTML =
+            `<span class="chip" style="--chip-bg:${c}1f;--chip-ink:${ink}">` +
+            `<i class="fa-solid ${kpiFilter.icon}"></i>${escapeHtml(kpiFilter.label)}` +
+            `<i class="fa-solid fa-xmark chip-clear" id="kpiChipClear" title="Clear"></i></span>`;
+          chip.classList.remove("d-none");
+          el("kpiChipClear").addEventListener("click", () => {
+            setKpiFilter(null);
+            page = 1;
+            loadFeed();
+          });
+        } else {
+          chip.innerHTML = "";
+          chip.classList.add("d-none");
+        }
+      }
+
+      /**
+       * One bar-list component for the area split and all three leaderboards.
+       * Plain HTML rather than a canvas: the labels are real text, so nothing
+       * can be clipped by its own mark and the list doubles as the table view.
+       */
+      function barList(items, opts = {}) {
+        const {
+          nameOf,
+          countOf,
+          subOf,
+          dotOf,
+          fillOf,
+          onClickAttr,
+          limit = 10,
+          empty = "No activity in this period.",
+        } = opts;
+        if (!items.length)
+          return `<div class="empty"><i class="fa-regular fa-folder-open"></i>
+                  <div class="empty-t">Nothing yet</div>
+                  <div class="muted mt-1">${empty}</div></div>`;
+
+        const max = Math.max(...items.map(countOf));
+        return items
+          .slice(0, limit)
+          .map((it) => {
+            const n = countOf(it);
+            const sub = subOf ? subOf(it) : "";
+            const dot = dotOf ? dotOf(it) : null;
+            const fill = fillOf ? fillOf(it) : null;
+            const attr = onClickAttr ? onClickAttr(it) : "";
+            return `
+              <div class="bl-row${attr ? " clickable" : ""}" ${attr}
+                   ${fill ? `style="--bar-c:${fill}"` : ""}>
+                <div class="bl-name">
+                  ${dot ? `<i class="dot" style="--dot-c:${dot}"></i>` : ""}
+                  <span>${escapeHtml(nameOf(it))}</span>
+                </div>
+                <div class="bl-val">${nf(n)}</div>
+                <div class="bl-track">
+                  <div class="bl-fill" style="width:${Math.max(2, (n / max) * 100)}%"></div>
+                </div>
+                ${sub ? `<div class="bl-sub">${escapeHtml(sub)}</div>` : ""}
+              </div>`;
+          })
+          .join("");
+      }
+
+      /**
+       * Activity by area — a sorted bar list, not a pie. Thirteen areas is far
+       * past the ~6 segments a donut can carry, and bars compare lengths on a
+       * common baseline, which is what "which area is busiest" actually asks.
+       * Each row is clickable and sets the area filter.
+       */
+      function renderAreaBars(summary) {
+        el("areaBars").innerHTML = barList(summary.byCategory, {
+          nameOf: (c) => c.category,
+          countOf: (c) => c.count,
+          dotOf: (c) => areaFill(c.category),
+          fillOf: (c) => areaFill(c.category),
+          onClickAttr: (c) => `data-area="${escapeHtml(c.category)}"`,
+          limit: 20,
+        });
+
+        el("areaBars")
+          .querySelectorAll("[data-area]")
+          .forEach((row) =>
+            row.addEventListener("click", () => {
+              setKpiFilter(null);
+              el("fCategory").value = row.dataset.area;
+              page = 1;
+              loadFeed();
+              el("feedTable").scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }),
+          );
+      }
+
+      function renderLeaderboards(summary) {
+        el("topUsers").innerHTML = barList(summary.byUser, {
+          nameOf: (u) => u.name || u.email || "Unknown",
+          countOf: (u) => u.count,
+          subOf: (u) => (u.departments || []).join(" / ") || u.email,
+        });
+        el("topDepartments").innerHTML = barList(summary.byDepartment, {
+          nameOf: (d) => d.department,
+          countOf: (d) => d.count,
+          // An activity inherits its department from whoever performed it, so
+          // this stays empty until the people acting are assigned one.
+          empty:
+            "Nobody who acted in this period belongs to a department. Assign one per user under Admin Tools → Departments.",
+        });
+        el("topProjects").innerHTML = barList(summary.topProjects, {
+          nameOf: (p) => p.projectNo,
+          countOf: (p) => p.count,
+          subOf: (p) => p.clientName,
+          empty: "No project-linked activity in this period.",
+        });
+      }
+
+      /**
+       * Drawing & BOM coverage — the denominator the upload tiles are missing.
+       *
+       * "4 drawing uploads this week" says nothing about how much is left; this
+       * says how many assemblies exist and how many of them carry a drawing and
+       * a BOM at all. An assembly is covered the moment it has one file of that
+       * kind — a second revision doesn't make it more covered — so the meters
+       * count ASSEMBLIES, and the file totals are reported separately.
+       *
+       * Deliberately period-blind: it is a snapshot of the whole book, which is
+       * why the card says "as of today" and why it isn't refetched when the
+       * range changes.
+       */
+      function covMeter(label, n, total, color) {
+        const p = total ? (n / total) * 100 : 0;
+        const left = total - n;
+        return `
+          <div class="bl-row" style="--bar-c:${color}">
+            <div class="bl-name">
+              <i class="dot" style="--dot-c:${color}"></i><span>${label}</span>
+            </div>
+            <div class="bl-val">${nf(n)} <span class="muted">/ ${nf(total)}</span></div>
+            <div class="bl-track">
+              <div class="bl-fill" style="width:${Math.max(n ? 2 : 0, p)}%"></div>
+            </div>
+            <div class="bl-sub">
+              ${p.toFixed(p > 0 && p < 10 ? 1 : 0)}% covered${left ? ` · ${nf(left)} still missing` : " · all covered"}
+            </div>
+          </div>`;
+      }
+
+      function renderCoverage(d) {
+        const t = d.totals;
+        const box = el("asmCoverage");
+
+        if (!t.assemblies) {
+          box.innerHTML = `
+            <div class="empty">
+              <i class="fa-regular fa-folder-open"></i>
+              <div class="empty-t">No assemblies yet</div>
+              <div class="muted mt-1">
+                Assemblies appear once a project's LOE workbook is uploaded.
+              </div>
+            </div>`;
+          return;
+        }
+
+        // Worst first — the list is there to be acted on, so the project with
+        // the most assemblies still lacking a file leads it.
+        const missing = (p) =>
+          p.total - p.withDrawing + (p.total - p.withBom);
+        const gaps = d.byProject
+          .filter((p) => missing(p) > 0)
+          .sort((a, b) => missing(b) - missing(a))
+          .slice(0, 8);
+
+        box.innerHTML = `
+          <div class="cov-head">
+            <div>
+              <div class="cov-total">${nf(t.assemblies)}</div>
+              <div class="cov-total-lbl">
+                assemblies across ${nf(t.projects)} project${t.projects === 1 ? "" : "s"}
+              </div>
+            </div>
+            <div class="pl-right">
+              ${pill(`${nf(t.withBoth)} have both`, t.withBoth === t.assemblies ? 6 : 0, "fa-layer-group")}
+            </div>
+          </div>
+
+          <div class="bl">
+            ${covMeter("With drawings", t.withDrawing, t.assemblies, tok("--s3"))}
+            ${covMeter("With BOM", t.withBom, t.assemblies, tok("--s7"))}
+          </div>
+
+          <div class="cov-sep">${gaps.length ? "Still incomplete" : "Coverage"}</div>
+          ${
+            gaps.length
+              ? gaps
+                  .map(
+                    (p) => `
+                      <div class="pl-row">
+                        <div class="pl-no">${escapeHtml(p.projectNo)}</div>
+                        <div class="pl-right">
+                          ${pill(`${p.withDrawing}/${p.total} dwg`, p.withDrawing === p.total ? 6 : 3)}
+                          ${pill(`${p.withBom}/${p.total} BOM`, p.withBom === p.total ? 6 : 7)}
+                        </div>
+                        ${p.clientName ? `<div class="pl-sub">${escapeHtml(p.clientName)}</div>` : ""}
+                      </div>`,
+                  )
+                  .join("")
+              : `<div class="note" style="--note-bg:${tok("--s6")}1f;--note-ink:${tok("--s6-ink")}">
+                   <i class="fa-solid fa-circle-check"></i>
+                   Every assembly has a drawing and a BOM.
+                 </div>`
+          }
+          <div class="muted mt-2">
+            ${nf(t.drawingFiles)} drawing file${t.drawingFiles === 1 ? "" : "s"} ·
+            ${nf(t.bomFiles)} BOM file${t.bomFiles === 1 ? "" : "s"} uploaded in total
+          </div>`;
+      }
+
+      /**
+       * Activity over time — ONE series (the period total), drawn in the single
+       * data hue. The previous version stacked all thirteen areas, which needed
+       * thirteen hues; past eight they stop being distinguishable, and the
+       * question this chart answers ("is activity rising or falling?") is about
+       * the total. The area split lives in its own panel.
+       */
+      function renderTrend(summary) {
+        el("trendUnit").textContent = `per ${summary.range.unit}`;
+
+        const labels = summary.trend.map((t) => prettyBucket(t.bucket));
+        const values = summary.trend.map((t) => t.total);
+
+        if (trendChart) trendChart.destroy();
+
+        // Nothing to plot — show the empty state rather than a bare axis.
+        const hasData = values.some((v) => v > 0);
+        el("trendEmpty").classList.toggle("d-none", hasData);
+        el("trendChart").style.visibility = hasData ? "visible" : "hidden";
+        if (!hasData) {
+          trendChart = null;
+          return;
+        }
+        trendChart = new Chart(el("trendChart"), {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Activities",
+                data: values,
+                backgroundColor: tok("--data"),
+                hoverBackgroundColor: tok("--s1-ink"),
+                borderRadius: { topLeft: 4, topRight: 4 },
+                borderSkipped: "bottom",
+                maxBarThickness: 24,
+                categoryPercentage: 0.72,
+                barPercentage: 0.94,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { top: 6 } },
+            // Generous hit area — the pointer never has to find the bar.
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              // A single series needs no legend: the card title names it.
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: "#16283a",
+                padding: 10,
+                cornerRadius: 8,
+                displayColors: false,
+                titleFont: { size: 12, weight: "600" },
+                bodyFont: { size: 12 },
+                callbacks: {
+                  label: (c) => ` ${nf(c.parsed.y)} activities`,
+                },
+              },
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                border: { color: tok("--line") },
+                ticks: {
+                  color: tok("--ink-3"),
+                  font: { size: 11 },
+                  maxRotation: 0,
+                  autoSkipPadding: 12,
+                },
+              },
+              y: {
+                beginAtZero: true,
+                border: { display: false },
+                grid: { color: tok("--line-soft"), drawTicks: false },
+                ticks: {
+                  color: tok("--ink-3"),
+                  font: { size: 11 },
+                  precision: 0,
+                  maxTicksLimit: 5,
+                  padding: 8,
+                },
+              },
+            },
+          },
+        });
+      }
+
+      // "2026-08-13" → "13 Aug"; "2026-W33" → "WW-33"; "2026-08" → "Aug 26";
+      // "2026-08-13 14:00" → "14:00". Long ISO keys make unreadable ticks.
+      function prettyBucket(b) {
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:00$/.test(b)) return b.slice(11);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(b)) {
+          const d = new Date(b + "T00:00:00");
+          return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+        }
+        if (/^\d{4}-W\d{2}$/.test(b)) return "WW-" + b.slice(-2);
+        if (/^\d{4}-\d{2}$/.test(b)) {
+          const d = new Date(b + "-01T00:00:00");
+          return d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+        }
+        return b;
+      }
+
+      /**
+       * Fill one filter dropdown, preserving the current selection if it still
+       * exists in the new period.
+       *
+       * When a dimension has nothing to offer, say WHY instead of leaving a
+       * lone "All …" entry — a dropdown with a single option reads as broken.
+       * The commonest case is Departments: a row only carries one if the person
+       * who acted belongs to a department (Branch), so an account with none
+       * assigned — typically a Superadmin — contributes no department at all.
+       */
+      function fillSelect(sel, allLabel, items, emptyNote) {
+        const prev = sel.value;
+        sel.innerHTML =
+          `<option value="all">${allLabel}</option>` +
+          (items.length
+            ? items
+                .map(
+                  (it) =>
+                    `<option value="${escapeHtml(it.value)}">${escapeHtml(it.label)}</option>`,
+                )
+                .join("")
+            : `<option value="all" disabled>— ${escapeHtml(emptyNote)} —</option>`);
+        if ([...sel.options].some((o) => o.value === prev && !o.disabled))
+          sel.value = prev;
+      }
+
+      function fillFilterOptions(summary, filters) {
+        fillSelect(
+          el("fCategory"),
+          "All areas",
+          summary.categories.map((c) => ({ value: c, label: c })),
+          "no activity yet",
+        );
+        fillSelect(
+          el("fAction"),
+          "All activity types",
+          filters.actions.map((a) => ({
+            value: a.action,
+            label: a.title || a.action,
+          })),
+          "no activity yet",
+        );
+        fillSelect(
+          el("fUser"),
+          "All people",
+          filters.users.map((u) => ({ value: u.email, label: u.name || u.email })),
+          "nobody active yet",
+        );
+      }
+
+      function initials(name) {
+        return String(name || "?")
+          .trim()
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((w) => w[0])
+          .join("")
+          .toUpperCase();
+      }
+
+      // A row usually names one project, but a meeting can cover several —
+      // list them all rather than picking one.
+      function renderProjectCell(r) {
+        const nos = (r.projectNos || []).filter(Boolean);
+        const list = nos.length ? nos : r.projectNo ? [r.projectNo] : [];
+        if (!list.length) return '<span class="muted">—</span>';
+        return (
+          `<div class="cell-strong">${escapeHtml(list.join(", "))}</div>` +
+          (list.length > 1
+            ? `<div class="cell-sub">${list.length} projects</div>`
+            : r.clientName
+              ? `<div class="cell-sub">${escapeHtml(r.clientName)}</div>`
+              : "")
+        );
+      }
+
+      function renderFeed(data) {
+        const body = el("feedBody");
+        if (!data.rows.length) {
+          body.innerHTML = `
+            <tr><td colspan="5">
+              <div class="empty">
+                <i class="fa-regular fa-face-smile"></i>
+                <div class="empty-t">No activity matches these filters</div>
+                <div class="muted mt-1">Try widening the period or clearing a filter.</div>
+              </div>
+            </td></tr>`;
+        } else {
+          body.innerHTML = data.rows
+            .map((r) => {
+              const when = new Date(r.at);
+              const derived = r.source === "backfill";
+              return `
+                <tr>
+                  <td class="cell-time">
+                    <div class="cell-strong">${when.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</div>
+                    <div class="cell-sub">${when.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</div>
+                  </td>
+                  <td>
+                    <span class="chip" style="--chip-bg:${areaFill(r.category)}1f;--chip-ink:${areaInk(r.category)}">
+                      <i class="dot" style="--dot-c:${areaFill(r.category)}"></i>${escapeHtml(r.category)}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="cell-strong">
+                      ${escapeHtml(r.title)}
+                      ${derived ? '<span class="tag-hist" title="Reconstructed from historical records">historical</span>' : ""}
+                    </div>
+                    ${r.description ? `<div class="cell-sub">${escapeHtml(r.description)}</div>` : ""}
+                  </td>
+                  <td>${renderProjectCell(r)}</td>
+                  <td>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="avatar">${escapeHtml(initials(r.actorName))}</span>
+                      <div style="min-width: 0">
+                        <div class="cell-strong text-truncate">${escapeHtml(r.actorName)}</div>
+                        <div class="cell-sub text-truncate">${escapeHtml((r.actorDepartments || []).join(" / ") || r.actorRole || "")}</div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>`;
+            })
+            .join("");
+        }
+
+        el("feedCount").textContent = `${nf(data.total)} in this period`;
+        el("pageInfo").textContent = `Page ${data.page} of ${data.pages} · showing ${nf(data.rows.length)} of ${nf(data.total)}`;
+        el("prevPage").disabled = data.page <= 1;
+        el("nextPage").disabled = data.page >= data.pages;
+      }
+
+      // ── board balancing ─────────────────────────────────────────────────
+      /**
+       * Deal the cards between the two stacks so neither leaves a well.
+       *
+       * Every card on this board is sized by its data: a quiet week leaves the
+       * leaderboards three rows tall while the coverage card stays long, and a
+       * busy one inverts that. So a split fixed in the markup is only balanced
+       * for one shape of data — every other shape ends with one stack running
+       * hundreds of pixels past the other and blank space under the short one.
+       *
+       * Each card is placed instead into whichever column is SHORTER at that
+       * moment, measured after each placement so the next decision sees the
+       * real, wrapped height rather than a prediction. A card that genuinely
+       * needs the wide column pins itself there (data-pin="wide") and is never
+       * moved — the trend chart and the stage funnel are the only two.
+       *
+       * The declared markup order is preserved as the canonical order (the two
+       * stacks zipped), so it is still what a reader gets before this runs and
+       * what they get on a narrow screen, where there is only one column and
+       * nothing to balance.
+       */
+      const narrowBoard = window.matchMedia("(max-width: 1100px)");
+
+      function balanceBoard(board) {
+        // A board in the hidden view measures 0 for everything, which would
+        // deal every card into the first column. It gets balanced when its
+        // view is switched to.
+        if (!board.getClientRects().length) return;
+
+        const cols = [...board.querySelectorAll(":scope > .board-col")];
+        if (cols.length !== 2) return;
+
+        // The canonical order is stamped ONCE, from the markup, and read back
+        // from the stamps afterwards. Re-deriving it from the live DOM would
+        // make it drift with every balance — each pass would reorder what the
+        // last pass produced, and the cards would shuffle on every render.
+        const cards = [...board.querySelectorAll(".card-x")];
+        if (!cards.every((c) => c.dataset.order)) {
+          const stacks = cols.map((c) => [
+            ...c.querySelectorAll(":scope > .card-x"),
+          ]);
+          const rows = Math.max(...stacks.map((s) => s.length));
+          let n = 0;
+          for (let i = 0; i < rows; i++)
+            for (const s of stacks) if (s[i]) s[i].dataset.order = n++;
+        }
+        const order = cards.sort(
+          (a, b) => Number(a.dataset.order) - Number(b.dataset.order),
+        );
+
+        // Pinned cards stay put — detaching and re-attaching the chart's
+        // canvas on every render is churn for no gain.
+        const movable = order.filter((c) => c.dataset.pin !== "wide");
+        movable.forEach((c) => c.remove());
+
+        if (narrowBoard.matches) {
+          movable.forEach((c) => cols[0].appendChild(c));
+          return;
+        }
+
+        for (const card of movable) {
+          // offsetHeight forces the pending layout, so each placement is
+          // decided against the column heights the previous one produced.
+          const target =
+            cols[0].offsetHeight <= cols[1].offsetHeight ? cols[0] : cols[1];
+          target.appendChild(card);
+        }
+      }
+
+      // Any render can change a card's height, so this is a page-level concern
+      // rather than something each renderer has to remember. Coalesced to one
+      // pass per frame — several panels finish in the same tick.
+      let balanceTimer;
+      function balanceBoards() {
+        clearTimeout(balanceTimer);
+        balanceTimer = setTimeout(
+          () => document.querySelectorAll(".board").forEach(balanceBoard),
+          0,
+        );
+      }
+      window.addEventListener("resize", balanceBoards);
+
+      // ── loading ─────────────────────────────────────────────────────────
+      // Refetch dims what's on screen instead of blanking it — no skeleton
+      // flash, no layout jump (see interaction guidance).
+      const busy = (ids, on) =>
+        ids.forEach((id) => el(id)?.classList.toggle("is-loading", on));
+      const SUMMARY_PANES = [
+        "kpiRow",
+        "trendChart",
+        "areaBars",
+        "topUsers",
+        "topDepartments",
+        "topProjects",
+      ];
+
+      async function loadSummary() {
+        busy(SUMMARY_PANES, true);
+        try {
+          const [summary, filters] = await Promise.all([
+            api("summary", {}, rangeParams),
+            api("filters", {}, rangeParams),
+          ]);
+          if (!summary.success) return;
+
+          const fmt = (d) =>
+            new Date(d).toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            });
+          setCaption(
+            "activity",
+            `${fmt(summary.range.from)} — ${fmt(summary.range.to)} · ` +
+              `<strong>${nf(summary.total)}</strong> activities`,
+          );
+
+          fillFilterOptions(summary, filters);
+          renderKpis(summary);
+          renderTrend(summary);
+          renderAreaBars(summary);
+          renderLeaderboards(summary);
+          balanceBoards();
+        } finally {
+          busy(SUMMARY_PANES, false);
+        }
+      }
+
+      // Coverage reads no period, so it is fetched once and kept — changing
+      // the range tells it nothing it doesn't already show.
+      let coverage = null;
+      async function loadCoverage() {
+        if (coverage) {
+          renderCoverage(coverage);
+          balanceBoards();
+          return;
+        }
+        busy(["asmCoverage"], true);
+        try {
+          const d = await api("assemblies", {}, () => "");
+          if (d.success) {
+            coverage = d;
+            renderCoverage(d);
+            balanceBoards();
+          }
+        } finally {
+          busy(["asmCoverage"], false);
+        }
+      }
+
+      async function loadFeed() {
+        busy(["feedWrap"], true);
+        try {
+          const data = await api("feed", { page, limit: el("fLimit").value });
+          if (data.success) renderFeed(data);
+        } finally {
+          busy(["feedWrap"], false);
+        }
+      }
+
+      // ══ Project overview ═══════════════════════════════════════════════
+      // The second view. Everything it shows is as-of-now — a stage count is
+      // a fact about today, not about the selected window — except the last
+      // tile, which is the one genuinely period-scoped number.
+
+      // The overview describes today, so it takes no period from the toolbar.
+      // Its two movement figures still need *some* window; they are pinned to
+      // a fixed trailing month, which is what "recently opened" means to a
+      // director and keeps the number stable between visits.
+      const MOVEMENT_DAYS = 30;
+      function overviewParams(extra = {}) {
+        const to = new Date();
+        const from = new Date(to.getTime() - MOVEMENT_DAYS * 24 * 60 * 60 * 1000);
+        return new URLSearchParams({
+          from: from.toISOString(),
+          to: to.toISOString(),
+          ...extra,
+        }).toString();
+      }
+
+      const OVERVIEW_PANES = [
+        "ovKpis",
+        "ovFunnel",
+        "ovAttention",
+        "ovOwners",
+        "ovManagers",
+        "ovClients",
+      ];
+
+      // Small tinted label. `slot` picks a categorical hue; the -ink step is
+      // what carries the text, because the base hues sit under 3:1 on white.
+      const pill = (text, slot, icon) =>
+        `<span class="pill" style="--pill-bg:${tok(`--s${slot}`)}1f;--pill-ink:${tok(`--s${slot}-ink`)}">` +
+        `${icon ? `<i class="fa-solid ${icon}"></i>` : ""}${escapeHtml(text)}</span>`;
+
+      const OV_TILES = (t) => [
+        {
+          hero: true,
+          label: "Projects",
+          value: t.total,
+          icon: "fa-diagram-project",
+          slot: null,
+          sub:
+            `${nf(t.running)} running · ${nf(t.pipeline)} still in the pipeline` +
+            (t.blocked ? ` · ${nf(t.blocked)} blocked` : ""),
+        },
+        {
+          label: "Running",
+          value: t.running,
+          icon: "fa-circle-play",
+          slot: 6,
+          sub: "kicked off — drawings releasing",
+        },
+        {
+          label: "Awaiting action",
+          value: t.pipeline,
+          icon: "fa-hourglass-half",
+          slot: 1,
+          sub: "sitting with a team before go-live",
+        },
+        {
+          label: "Due soon",
+          value: t.dueSoon,
+          icon: "fa-clock",
+          slot: 4,
+          sub: "inside the last stretch of their SLA",
+        },
+        {
+          label: "Blocked / escalated",
+          value: t.blocked,
+          icon: "fa-ban",
+          slot: 7,
+          sub: "stopped, escalated to Directors",
+        },
+      ];
+
+      function renderOvKpis(t) {
+        el("ovKpis").innerHTML = OV_TILES(t)
+          .map((d) => {
+            const c = d.slot ? tok(`--s${d.slot}`) : tok("--brand");
+            const ink = d.slot ? tok(`--s${d.slot}-ink`) : tok("--brand");
+            return `
+              <div class="kpi static${d.hero ? " hero" : ""}"
+                   style="--kpi-c:${c};--kpi-ink:${ink};--kpi-bg:${c}1f">
+                <div class="kpi-top">
+                  <div>
+                    <div class="kpi-label">${escapeHtml(d.label)}</div>
+                    <div class="kpi-value">${nf(d.value)}</div>
+                  </div>
+                  <div class="kpi-icon"><i class="fa-solid ${d.icon}"></i></div>
+                </div>
+                <div class="kpi-share">${d.sub}</div>
+              </div>`;
+          })
+          .join("");
+      }
+
+      /**
+       * One project, as it appears in a stage drill-down or the attention
+       * list. The day count is the time spent in the CURRENT stage, not the
+       * project's age — that's the number a manager can act on.
+       */
+      function projectRow(p, opts = {}) {
+        const sub = [
+          opts.showStage ? p.stageLabel : "",
+          p.clientName,
+          p.machine,
+          p.projectManager ? `PM: ${p.projectManager}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        const flags = [];
+        if (p.rejected) flags.push(pill("sent back", 2, "fa-rotate-left"));
+        if (p.spare) flags.push(pill("spare", 0));
+        if (p.days !== null)
+          flags.push(
+            pill(
+              `${p.days} d`,
+              p.overdue ? 8 : p.dueSoon ? 4 : 0,
+              p.overdue ? "fa-triangle-exclamation" : "fa-clock",
+            ),
+          );
+
+        return `
+          <div class="pl-row">
+            <div class="pl-no">${escapeHtml(p.projectNo)}</div>
+            <div class="pl-right">${flags.join("")}</div>
+            ${sub ? `<div class="pl-sub">${escapeHtml(sub)}</div>` : ""}
+          </div>`;
+      }
+
+      /**
+       * The stage funnel — the answer to "how many projects are where".
+       *
+       * Every stage is drawn even at zero: an empty stage is information, and
+       * a list that drops its empty rows can't be compared week to week. Bars
+       * share one hue so lengths are the only thing being compared; the two
+       * terminal states (Active, Blocked) get their own colour because they
+       * are not steps in the queue.
+       */
+      function renderFunnel(stages) {
+        const max = Math.max(1, ...stages.map((s) => s.count));
+        el("ovFunnel").innerHTML = stages
+          .map((s) => {
+            const hue =
+              s.stage === 10 ? tok("--s6") : s.stage === 99 ? tok("--s8") : tok("--data");
+
+            const meta = [`<span>${escapeHtml(s.owner)}</span>`];
+            if (s.count && s.oldestDays)
+              meta.push(`<span>· longest wait ${s.oldestDays} d</span>`);
+            if (s.overdue)
+              meta.push(pill(`${s.overdue} past SLA`, 8, "fa-triangle-exclamation"));
+
+            const panel = s.count
+              ? `<div class="fn-panel">
+                   ${s.projects.map((p) => projectRow(p)).join("")}
+                   ${s.truncated ? `<div class="muted mt-2">+ ${nf(s.truncated)} more</div>` : ""}
+                 </div>`
+              : "";
+
+            return `
+              <div class="fn-row${s.count ? "" : " zero"}" style="--fn-c:${hue}">
+                <i class="fa-solid fa-chevron-right fn-caret"></i>
+                <div class="fn-name">${escapeHtml(s.label)}</div>
+                <div class="fn-count">${nf(s.count)}</div>
+                <div class="fn-meta">${meta.join("")}</div>
+                <div class="fn-track">
+                  <div class="fn-fill" style="width:${s.count ? Math.max(2, (s.count / max) * 100) : 0}%"></div>
+                </div>
+                ${panel}
+              </div>`;
+          })
+          .join("");
+      }
+
+      function renderAttention(d) {
+        const out = [];
+
+        // A pending Technical Scope revision blocks a project without moving
+        // its stage, so it never shows up in the SLA list — but it is a
+        // Director's action, which is exactly who reads this card.
+        if (d.totals.pendingTechScope)
+          out.push(
+            `<div class="note" style="--note-bg:${tok("--s5")}1f;--note-ink:${tok("--s5-ink")}">
+               <i class="fa-solid fa-file-signature"></i>
+               ${nf(d.totals.pendingTechScope)} Technical Scope revision${d.totals.pendingTechScope === 1 ? "" : "s"} waiting on an approver
+             </div>`,
+          );
+
+        out.push(
+          d.attention.length
+            ? d.attention.map((p) => projectRow(p, { showStage: true })).join("")
+            : `<div class="empty">
+                 <i class="fa-regular fa-circle-check"></i>
+                 <div class="empty-t">Everything is inside its SLA</div>
+                 <div class="muted mt-1">No project has overrun the time allowed for its current stage.</div>
+               </div>`,
+        );
+
+        el("ovAttention").innerHTML = out.join("");
+      }
+
+      function renderOvLists(d) {
+        el("ovOwners").innerHTML = barList(d.byOwner, {
+          nameOf: (o) => o.owner,
+          countOf: (o) => o.count,
+          subOf: (o) =>
+            o.overdue
+              ? `${o.overdue} past SLA · longest ${o.oldestDays} d`
+              : `all on track · longest ${o.oldestDays} d`,
+          // Red only where something is actually late; the sub-line says the
+          // same thing in words, so colour is never the only cue.
+          fillOf: (o) => (o.overdue ? tok("--s8") : tok("--data")),
+          dotOf: (o) => (o.overdue ? tok("--s8") : tok("--data")),
+          limit: 12,
+          empty: "Nothing is waiting on anybody — every project is active.",
+        });
+
+        el("ovManagers").innerHTML = barList(d.byManager, {
+          nameOf: (m) => m.name,
+          countOf: (m) => m.count,
+          subOf: (m) => `${m.running} running · ${m.pipeline} in the pipeline`,
+          empty: "No project has a manager assigned yet.",
+        });
+
+        el("ovClients").innerHTML = barList(d.byClient, {
+          nameOf: (c) => c.client,
+          countOf: (c) => c.count,
+          subOf: (c) => `${c.running} running · ${c.pipeline} in the pipeline`,
+          empty: "No projects.",
+        });
+      }
+
+      async function loadOverview() {
+        busy(OVERVIEW_PANES, true);
+        try {
+          const d = await api("overview", {}, overviewParams);
+          if (!d.success) return;
+          renderOvKpis(d.totals);
+          renderFunnel(d.stages);
+          renderAttention(d);
+          renderOvLists(d);
+          balanceBoards();
+          // Just the count and when it was read — the tiles directly below
+          // already carry the awaiting/overdue breakdown, so repeating it
+          // here was noise. The stamp stays: this view is a snapshot, and a
+          // snapshot has to say when it was taken.
+          setCaption(
+            "overview",
+            `<strong>${nf(d.totals.total)}</strong> project${d.totals.total === 1 ? "" : "s"} · as of ` +
+              new Date(d.generatedAt).toLocaleString("en-IN", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+          );
+        } finally {
+          busy(OVERVIEW_PANES, false);
+        }
+      }
+
+      // ── view switching ──────────────────────────────────────────────────
+      // The two views read the same period but different endpoints, so each
+      // keeps its own caption and its own "needs reloading" flag. Switching
+      // never refetches what is already current.
+      let view = "activity";
+      let stale = { activity: true, overview: true };
+      const captions = { activity: "Loading…", overview: "Loading…" };
+
+      function setCaption(which, html) {
+        captions[which] = html;
+        if (view === which) el("rangeCaption").innerHTML = html;
+      }
+
+      async function refreshView() {
+        if (!stale[view]) return;
+        if (view === "activity") {
+          await loadSummary();
+          await loadCoverage();
+          await loadFeed();
+        } else {
+          await loadOverview();
+        }
+        stale[view] = false;
+      }
+
+      async function setView(next) {
+        if (next === view) return;
+        view = next;
+        document
+          .querySelectorAll(".view-btn")
+          .forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+        el("activityView").classList.toggle("d-none", view !== "activity");
+        el("overviewView").classList.toggle("d-none", view !== "overview");
+        el("periodControls").classList.toggle("d-none", view !== "activity");
+        el("pageTitle").textContent =
+          view === "activity" ? "Activity Log" : "Project Overview";
+        el("rangeCaption").innerHTML = captions[view];
+        // The board that was hidden could not be measured, so it is dealt the
+        // moment it becomes visible — before any refetch it may not need.
+        balanceBoards();
+        try {
+          await refreshView();
+        } catch (err) {
+          if (!["forbidden", "unauthorized"].includes(err.message))
+            console.error(err);
+        }
+      }
+
+      // Called whenever the period changes. Filters are dropped first so the
+      // feed can't stay narrowed to a tile that no longer reflects the window.
+      // Only the log is invalidated — the overview reads no period, so a new
+      // range tells it nothing it doesn't already show.
+      async function reloadAll() {
+        page = 1;
+        clearFilters();
+        stale.activity = true;
+        try {
+          await refreshView();
+        } catch (err) {
+          if (!["forbidden", "unauthorized"].includes(err.message))
+            console.error(err);
+        }
+      }
+
+      // ══ Date range picker ═══════════════════════════════════════════════
+      // Two months on one grid, both ends picked on it: the first click sets
+      // the start and hands the focus to the end, the second closes the range.
+      // The span between is banded live as the pointer moves, so the range is
+      // visible BEFORE it is committed — which two typed date fields could
+      // never show.
+
+      const MS_DAY = 86400000;
+      const midnight = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const dayNo = (d) => midnight(d).getTime();
+      const monthStart = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+      const addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+      const fmtDay = (d) =>
+        d.toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+      const fmtShort = (d) =>
+        d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+
+      const DOW = ["S", "M", "T", "W", "T", "F", "S"];
+
+      const dp = {
+        view: null, // month shown in the LEFT pane
+        from: null,
+        to: null,
+        focus: "from", // which end the next click on the calendar fills
+        hover: null, // live end while the range is still open
+      };
+
+      function dpCells(base) {
+        const y = base.getFullYear();
+        const m = base.getMonth();
+        const lead = new Date(y, m, 1).getDay();
+        const days = new Date(y, m + 1, 0).getDate();
+        const today = dayNo(new Date());
+
+        // The band's far end: the chosen end, or whatever is under the pointer
+        // while the end is still open. Only band FORWARD — hovering before the
+        // start means the next click restarts the range there, so drawing a
+        // band would promise something that isn't going to happen.
+        const lo = dp.from ? dayNo(dp.from) : null;
+        const provisional =
+          dp.to || (dp.focus === "to" && dp.hover ? dp.hover : null);
+        const hi =
+          lo !== null && provisional && dayNo(provisional) >= lo
+            ? dayNo(provisional)
+            : null;
+        const banded = hi !== null && hi !== lo;
+
+        let out = "";
+        for (let i = 0; i < lead; i++) out += `<div class="dp-cell blank"></div>`;
+        for (let d = 1; d <= days; d++) {
+          const t = new Date(y, m, d).getTime();
+          const isStart = t === lo;
+          const isEnd = hi !== null && t === hi;
+          const between = banded && t > lo && t < hi;
+
+          const cls = [];
+          if (isStart) cls.push("start");
+          if (isEnd) cls.push("end");
+          if (banded && (between || isStart || isEnd)) cls.push("in");
+          if (t === today) cls.push("today");
+
+          out +=
+            `<div class="dp-cell ${cls.join(" ")}">` +
+            `<button type="button" class="dp-day" data-t="${t}"${t > today ? " disabled" : ""}>${d}</button>` +
+            `</div>`;
+        }
+        // Pad out to a full six-week block so every month is the same height.
+        for (let i = lead + days; i < 42; i++)
+          out += `<div class="dp-cell blank"></div>`;
+        return out;
+      }
+
+      function dpRender() {
+        el("dpMonths").innerHTML = [dp.view, addMonths(dp.view, 1)]
+          .map(
+            (b) => `
+              <div>
+                <div class="dp-mtitle">${b.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</div>
+                <div class="dp-grid">
+                  ${DOW.map((d) => `<div class="dp-dow">${d}</div>`).join("")}
+                  ${dpCells(b)}
+                </div>
+              </div>`,
+          )
+          .join("");
+
+        const ff = el("dpFromField");
+        const tf = el("dpToField");
+        el("dpFromTxt").textContent = dp.from ? fmtDay(dp.from) : "Start date";
+        el("dpToTxt").textContent = dp.to ? fmtDay(dp.to) : "End date";
+        ff.classList.toggle("empty", !dp.from);
+        tf.classList.toggle("empty", !dp.to);
+        ff.classList.toggle("active", dp.focus === "from");
+        tf.classList.toggle("active", dp.focus === "to");
+
+        // The hint is what "tells you to choose the last date" once a start
+        // is down, and Done stays out of reach until the range is closed.
+        const span = dp.to
+          ? Math.round((dayNo(dp.to) - dayNo(dp.from)) / MS_DAY) + 1
+          : 0;
+        el("dpHint").textContent = !dp.from
+          ? "Pick a start date"
+          : !dp.to
+            ? "Now pick the end date"
+            : `${nf(span)} day${span === 1 ? "" : "s"} selected`;
+        el("dpApply").disabled = !(dp.from && dp.to);
+
+        // There is no activity in the future, so the right pane stops at the
+        // current month.
+        el("dpNext").disabled =
+          addMonths(dp.view, 1).getTime() >= monthStart(new Date()).getTime();
+      }
+
+      function dpOpen() {
+        dp.from = range ? new Date(range.from) : null;
+        dp.to = range ? new Date(range.to) : null;
+        dp.focus = "from";
+        dp.hover = null;
+
+        // Open on the month the range ENDS in — that is the end people adjust
+        // — but never let the right pane run past the current month.
+        const anchor = dp.to || dp.from || new Date();
+        dp.view = addMonths(monthStart(anchor), -1);
+        const curStart = monthStart(new Date());
+        if (addMonths(dp.view, 1).getTime() > curStart.getTime())
+          dp.view = addMonths(curStart, -1);
+
+        el("datePicker").classList.add("open");
+        el("dpTrigger").setAttribute("aria-expanded", "true");
+        el("dpPop").hidden = false;
+        dpRender();
+      }
+
+      function dpClose() {
+        el("datePicker").classList.remove("open");
+        el("dpTrigger").setAttribute("aria-expanded", "false");
+        el("dpPop").hidden = true;
+      }
+
+      function dpPick(t) {
+        const d = new Date(t);
+        if (dp.focus === "from" || !dp.from || dp.to || dayNo(d) < dayNo(dp.from)) {
+          // Starting fresh — including the case where the click lands before
+          // the current start. Restarting there is honest; silently swapping
+          // the two ends would change what the first click meant.
+          dp.from = d;
+          dp.to = null;
+          dp.focus = "to";
+        } else {
+          dp.to = d;
+          dp.focus = "from";
+        }
+        dp.hover = null;
+        dpRender();
+      }
+
+      function dpCommit() {
+        if (!dp.from || !dp.to) return;
+        const from = midnight(dp.from);
+        const to = midnight(dp.to);
+        to.setHours(23, 59, 59, 999);
+        document
+          .querySelectorAll(".preset-btn")
+          .forEach((b) => b.classList.remove("active"));
+        setRange(from, to);
+        dpClose();
+        reloadAll();
+      }
+
+      // The single place the active window is recorded — presets and the
+      // picker both land here, so the trigger label can never drift from what
+      // the page is actually showing.
+      function setRange(from, to) {
+        range = { from, to };
+        el("dpLabel").textContent =
+          from.getFullYear() === to.getFullYear()
+            ? `${fmtShort(from)} – ${fmtShort(to)} ${to.getFullYear()}`
+            : `${fmtDay(from)} – ${fmtDay(to)}`;
+      }
+
+      // Reset every filter — used when the period changes, so the feed always
+      // matches the tiles the user is looking at.
+      function clearFilters() {
+        setKpiFilter(null);
+        ["fCategory", "fAction", "fUser"].forEach(
+          (id) => (el(id).value = "all"),
+        );
+        el("fSearch").value = "";
+      }
+
+      // ── wiring ──────────────────────────────────────────────────────────
+      document
+        .querySelectorAll(".view-btn")
+        .forEach((btn) =>
+          btn.addEventListener("click", () => setView(btn.dataset.view)),
+        );
+
+      // A stage row opens to reveal the projects sitting in it. Delegated, so
+      // it survives every re-render of the funnel.
+      el("ovFunnel").addEventListener("click", (e) => {
+        // Clicks on the projects inside must not collapse the panel holding
+        // them — only the stage header itself toggles.
+        if (e.target.closest(".fn-panel")) return;
+        const row = e.target.closest(".fn-row");
+        if (!row || row.classList.contains("zero")) return;
+        row.classList.toggle("open");
+        // Opening a stage can add hundreds of pixels to this column.
+        balanceBoards();
+      });
+
+      document.querySelectorAll(".preset-btn").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          document
+            .querySelectorAll(".preset-btn")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const { from, to } = presetRange(btn.dataset.preset);
+          setRange(from, to);
+          reloadAll();
+        }),
+      );
+
+      // ── date range picker ───────────────────────────────────────────────
+      el("dpTrigger").addEventListener("click", () => {
+        if (el("dpPop").hidden) dpOpen();
+        else dpClose();
+      });
+
+      el("dpMonths").addEventListener("click", (e) => {
+        const btn = e.target.closest(".dp-day");
+        if (btn && !btn.disabled) dpPick(Number(btn.dataset.t));
+      });
+
+      // Live band while the end is still open. Guarded on the day actually
+      // changing — the grid is rebuilt on each move, which would otherwise
+      // re-fire mouseover on the replacement cell forever.
+      el("dpMonths").addEventListener("mouseover", (e) => {
+        const btn = e.target.closest(".dp-day");
+        if (!btn || btn.disabled) return;
+        if (!(dp.focus === "to" && dp.from && !dp.to)) return;
+        const t = Number(btn.dataset.t);
+        if (dp.hover && dp.hover.getTime() === t) return;
+        dp.hover = new Date(t);
+        dpRender();
+      });
+      el("dpMonths").addEventListener("mouseleave", () => {
+        if (!dp.hover) return;
+        dp.hover = null;
+        dpRender();
+      });
+
+      // Clicking either end's field aims the next calendar click at it.
+      [el("dpFromField"), el("dpToField")].forEach((f) =>
+        f.addEventListener("click", () => {
+          dp.focus = f.dataset.which;
+          dpRender();
+        }),
+      );
+
+      el("dpPrev").addEventListener("click", () => {
+        dp.view = addMonths(dp.view, -1);
+        dpRender();
+      });
+      el("dpNext").addEventListener("click", () => {
+        if (el("dpNext").disabled) return;
+        dp.view = addMonths(dp.view, 1);
+        dpRender();
+      });
+
+      el("dpReset").addEventListener("click", () => {
+        dp.from = null;
+        dp.to = null;
+        dp.focus = "from";
+        dp.hover = null;
+        dpRender();
+      });
+
+      el("dpApply").addEventListener("click", dpCommit);
+
+      // Dismissing without pressing Done leaves the active window untouched —
+      // dpOpen() re-seeds from `range` every time, so nothing half-picked
+      // survives the close.
+      //
+      // CAPTURE phase, and it has to be: picking a day rebuilds the calendar's
+      // innerHTML, so by the time a bubbling handler saw this event its target
+      // would be a DETACHED node — `closest("#datePicker")` would find nothing
+      // and every day click would slam the popover shut. Capturing runs the
+      // containment test while the clicked button is still in the document.
+      document.addEventListener(
+        "click",
+        (e) => {
+          if (el("dpPop").hidden) return;
+          if (!e.target.closest("#datePicker")) dpClose();
+        },
+        true,
+      );
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !el("dpPop").hidden) dpClose();
+      });
+
+      // Picking a dropdown is an explicit choice — it replaces any tile
+      // selection, so the two can never disagree about what is shown.
+      ["fCategory", "fAction", "fUser", "fLimit"].forEach((id) =>
+        el(id).addEventListener("change", () => {
+          if (kpiFilter && (id === "fCategory" || id === "fAction"))
+            setKpiFilter(null);
+          page = 1;
+          loadFeed();
+        }),
+      );
+
+      let searchTimer;
+      el("fSearch").addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          page = 1;
+          loadFeed();
+        }, 350);
+      });
+
+      el("prevPage").addEventListener("click", () => {
+        if (page > 1) {
+          page--;
+          loadFeed();
+        }
+      });
+      el("nextPage").addEventListener("click", () => {
+        page++;
+        loadFeed();
+      });
+
+      // el("exportBtn").addEventListener("click", async () => {
+      //   try {
+      //     const res = await fetch(`${API_URL}/activity/export?${queryString()}`, {
+      //       headers: { Authorization: "Bearer " + token },
+      //     });
+      //     if (!res.ok) throw new Error("Export failed");
+      //     const blob = await res.blob();
+      //     const url = URL.createObjectURL(blob);
+      //     const a = document.createElement("a");
+      //     a.href = url;
+      //     a.download = `activity-log-${toInputValue(range.from)}_to_${toInputValue(range.to)}.csv`;
+      //     a.click();
+      //     URL.revokeObjectURL(url);
+      //   } catch (err) {
+      //     Swal.fire({
+      //       icon: "error",
+      //       title: "Could not export",
+      //       text: err.message,
+      //     });
+      //   }
+      // });
+
+      // ── boot ────────────────────────────────────────────────────────────
+      document.addEventListener("DOMContentLoaded", async () => {
+        if (!token) {
+          window.location.href = "login.html";
+          return;
+        }
+        const { from, to } = presetRange("week");
+        setRange(from, to);
+        try {
+          const gate = await fetch(`${API_URL}/activity/access`, {
+            headers: { Authorization: "Bearer " + token },
+          }).then((r) => r.json());
+          if (!gate.allowed) return showDenied();
+        } catch {
+          return showDenied();
+        }
+        reloadAll();
+      });
+    </script>
+  </body>
+</html>
