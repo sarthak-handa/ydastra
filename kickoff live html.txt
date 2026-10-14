@@ -183,6 +183,19 @@
         font-size: 0.8rem;
         padding: 6px 10px;
       }
+      /* Stage number in front of the stage name — the same number the
+         circle carries in the Project Details stage bar. */
+      .stage-no {
+        display: inline-block;
+        min-width: 1.5em;
+        padding: 0 0.3em;
+        margin-right: 0.4em;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #212529;
+        font-weight: 700;
+        text-align: center;
+      }
 
       .bg-stage-0 {
         background-color: #6c757d;
@@ -1365,11 +1378,27 @@
           DECISION: 7,
           ADVANCE: 15,
           PM: 7,
-          KICKOFF: 7,
+          KICKOFF: 15,
           PLANNING: 7,
           APPROVAL: 7,
           DATES: 7,
         },
+      };
+
+      // A stage's sequence number, as shown in the stage bar circles and in
+      // front of the stage name in the table: Sales 1, Design 2, Dir 3 …
+      // Drawings 11. Electrical Design (stage 1.5) is the second half of the
+      // Design step, so it is 2b. Blocked projects are off the sequence and
+      // get no number.
+      const stageNumber = (stage) => {
+        const v = Number(stage);
+        if (v === 1.5) return "2b";
+        if (Number.isInteger(v) && v >= 0 && v <= 10) return String(v + 1);
+        return "";
+      };
+      const stageNoHtml = (stage) => {
+        const n = stageNumber(stage);
+        return n ? `<span class="stage-no">${n}</span>` : "";
       };
 
       const EXPECTED_PLANNING_HEADERS = [
@@ -1775,8 +1804,25 @@
                 const loeInput = document.getElementById("actLoeFile");
                 if (loeInput.files.length === 0)
                   return Swal.fire("Required", "Upload LOE Excel", "warning");
+                // The sheets ticked in the preview are the LOE.
+                const picker = this._loeSheetPick;
+                if (!picker || picker.file !== loeInput.files[0])
+                  return Swal.fire(
+                    "Please wait",
+                    "The LOE is still being read — check the sheet preview, then upload.",
+                    "info",
+                  );
+                if (!picker.selected.length)
+                  return Swal.fire(
+                    "Choose a sheet",
+                    "Tick at least one sheet to upload as the LOE.",
+                    "warning",
+                  );
+                if (picker.clash)
+                  return Swal.fire("Two sheets, one name", picker.clash, "warning");
                 url = `${API_URL}/kickoffRoutes/uploadLoeFiles/${id}`;
                 formData.append("loeFile", loeInput.files[0]);
+                formData.append("sheets", JSON.stringify(picker.selected));
                 isMultipart = true;
               }
             } else if (role === "PLANNING_COLUMNS") {
@@ -1971,7 +2017,7 @@
               }`,
               client: `<div>${p.clientName}</div><div class="small text-muted"><i class="fa fa-map-marker-alt me-1"></i>${p.siteName} / ${p.machine}</div>`,
               machineDescription: `<div>${p.machineDescription}</div>`,
-              stage: `<span class="badge status-badge ${config.cls}">${config.label}</span>`,
+              stage: `<span class="badge status-badge ${config.cls}">${stageNoHtml(p.stage)}${config.label}</span>`,
               // Raw numeric stage used by the Stage column's `render`
               // callback so DataTables sorts by workflow order, not by
               // the alphabetised badge text.
@@ -2031,15 +2077,44 @@
           return owners[stage] || "Unknown";
         },
 
+        /**
+         * When the project arrived at the stage it is on now — the latest
+         * stageHistory entry for that stage (latest, because a rejection
+         * can send a project back to a stage it has been on before).
+         *
+         * Deliberately NOT `updatedAt`: that moves on every save — an LOE
+         * edit, a drawing replace, a remark, the 9 AM escalation itself —
+         * which made a project stuck on its stage read "On Track" again
+         * the moment anyone touched it.
+         *
+         * Projects from before stage history was kept have no entry; the
+         * early stages fall back to the creation date, the rest to
+         * `updatedAt` because nothing better was recorded.
+         */
+        stageEnteredAt(p) {
+          let latest = 0;
+          (p.stageHistory || []).forEach((h) => {
+            if (!h || !h.at || Number(h.stage) !== Number(p.stage)) return;
+            const t = new Date(h.at).getTime();
+            if (t > latest) latest = t;
+          });
+          if (latest) return new Date(latest);
+          if (Number(p.stage) <= 1.5 && p.createdAt) return new Date(p.createdAt);
+          return new Date(p.updatedAt || p.createdAt);
+        },
+
         calculateSLA(p, statusKey) {
           if (statusKey === "ACTIVE")
             return { color: "badge-sla-green", text: "Active" };
-          const lastUpdate = p.updatedAt
-            ? new Date(p.updatedAt)
-            : new Date(p.createdAt);
-          const days = (new Date() - lastUpdate) / (1000 * 60 * 60 * 24);
+          // Days on THIS stage. Only moving to another stage resets it.
+          const days =
+            (new Date() - this.stageEnteredAt(p)) / (1000 * 60 * 60 * 24);
+          // Same limits as the Directors' escalation (STAGE_RULES in
+          // backend/utils/schedular.js): Finance and Kick-Off get 15 days,
+          // every other stage 7.
           let limit = 7;
           if (statusKey === "AWAITING_ADVANCE") limit = CONSTANTS.SLA.ADVANCE;
+          if (statusKey === "PENDING_KICKOFF") limit = CONSTANTS.SLA.KICKOFF;
           if (days > limit)
             return { color: "badge-sla-red", text: "Escalated" };
           if (days > limit * 0.7)
@@ -2255,7 +2330,7 @@
                   <td class="fw-bold">${esc(p.projectNo || p.salesOrderNo || "-")}</td>
                   <td>${esc(p.clientName)}${site}</td>
                   <td>${esc(p.machine)}</td>
-                  <td><span class="badge ${cfg.cls}">${cfg.label}</span></td>
+                  <td><span class="badge ${cfg.cls}">${stageNoHtml(p.stage)}${cfg.label}</span></td>
                 </tr>`;
             })
             .join("");
@@ -2432,7 +2507,9 @@
                 <div class="mb-3">
                   <label class="form-label fw-bold">LOE Excel File <span class="text-danger">*</span></label>
                   <input class="form-control" type="file" id="actLoeFile" accept=".xlsx, .xls, .csv">
-                </div>`;
+                </div>
+                <div id="loeSheetPicker"></div>`;
+              this.initLoeSheetPicker();
             }
           } else if (actionRole === "PLANNING_COLUMNS") {
             title.innerText = "Add Plan";
@@ -2886,29 +2963,29 @@
             }
 
             let statusClass = "";
-            let icon = "";
+            // Every circle carries its stage number; the colour (green done,
+            // blue current, dashed skipped, grey not reached) says where it
+            // stands, and the tooltip spells it out.
+            const icon = stageNumber(step.val);
             let title = "";
             if (isCurrent) {
               statusClass = "active";
-              icon = '<i class="fa fa-spinner fa-spin"></i>';
               title = dateMs
                 ? `${step.label} — in progress since ${fmtStageDate(dateMs)}`
                 : `${step.label} — in progress (start date not recorded)`;
             } else if (isPast && happened) {
               statusClass = "completed";
-              icon = '<i class="fa fa-check"></i>';
               title = dateMs
                 ? `${step.label} — completed on ${fmtStageDate(dateMs)}`
                 : `${step.label} — completed (date not recorded)`;
             } else if (isPast && !happened) {
               statusClass = "skipped";
-              icon = '<i class="fa fa-minus"></i>';
               title = `${step.label} — skipped (not required)`;
             } else {
-              icon = '<i class="fa fa-circle-notch opacity-25"></i>';
               title = `${step.label} — not started yet`;
             }
 
+            title = `${icon}. ${title}`;
             stepperHtml += `<div class="stepper-item ${statusClass}" title="${title}"><div class="step-counter">${icon}</div><div class="step-name">${step.label}</div></div>`;
           });
           $("#projectStepper").html(stepperHtml);
@@ -3075,7 +3152,7 @@
             filesHtml += ` <div class="btn-group btn-group-sm" role="group">
               <button class="btn btn-outline-warning" onclick="app.viewPlannedLoeFile('${p._id}')"><i class="fa fa-file-excel me-1"></i>View Planning Sheet</button>`;
             if (canEditPlanning) {
-              filesHtml += `<button class="btn btn-outline-warning" type="button" title="Edit Planning Sheet (Dispatch Week & Billing Value)" onclick="app.openPlanningColumnsEditor('${p._id}')"><i class="fa fa-pen-to-square"></i></button>`;
+              filesHtml += `<button class="btn btn-outline-warning" type="button" title="Edit Planning Sheet (Dispatch Week, Billing Value & Category)" onclick="app.openPlanningColumnsEditor('${p._id}')"><i class="fa fa-pen-to-square"></i></button>`;
             }
             filesHtml += `</div>`;
           }
@@ -3856,6 +3933,8 @@
           inputs.forEach((input) => {
             const accept = (input.getAttribute("accept") || "").toLowerCase();
             if (!accept.includes("xls") && !accept.includes("csv")) return;
+            // The LOE upload has its own sheet picker + preview.
+            if (input.id === "actLoeFile") return;
             if (input.dataset.previewWired === "1") return;
             input.dataset.previewWired = "1";
 
@@ -3865,42 +3944,35 @@
               "max-height:300px;overflow:auto;display:none;border:1px solid #dee2e6;border-radius:4px;background:#fff;";
             input.insertAdjacentElement("afterend", previewBox);
 
-            input.addEventListener("change", async (e) => {
-              const file = e.target.files && e.target.files[0];
-              if (!file) {
-                previewBox.style.display = "none";
-                previewBox.innerHTML = "";
-                return;
-              }
-              try {
-                const buf = await file.arrayBuffer();
-                const wb = XLSX.read(buf, { type: "array" });
-                const sheetName = wb.SheetNames[0];
-                if (!sheetName) {
-                  previewBox.style.display = "block";
-                  previewBox.innerHTML =
-                    '<div class="p-2 text-muted small">Empty workbook.</div>';
-                  return;
-                }
-                const ws = wb.Sheets[sheetName];
-                const rows = XLSX.utils.sheet_to_json(ws, {
-                  header: 1,
-                  defval: "",
-                });
-                if (!rows.length) {
-                  previewBox.style.display = "block";
-                  previewBox.innerHTML =
-                    '<div class="p-2 text-muted small">Sheet is empty.</div>';
-                  return;
-                }
-                const MAX_ROWS = 50;
-                const previewRows = rows.slice(0, MAX_ROWS);
-                const cols = Math.max(...previewRows.map((r) => r.length));
-                const totalNote =
-                  rows.length > MAX_ROWS
-                    ? `Showing first ${MAX_ROWS} of ${rows.length} rows`
-                    : `${rows.length} row${rows.length === 1 ? "" : "s"}`;
-                let html = `<div class="d-flex justify-content-between align-items-center px-2 py-1 small bg-light border-bottom" style="position:sticky;top:0;z-index:1;"><strong>Preview: ${escapeHtml(sheetName)}</strong><span class="text-muted">${totalNote}</span></div>`;
+            // Draw one sheet of the picked workbook. A template for a
+            // multi-sheet LOE has one tab per sheet, so the preview gets tabs.
+            const render = (wb, sheetName) => {
+              const ws = wb.Sheets[sheetName];
+              const rows = XLSX.utils.sheet_to_json(ws, {
+                header: 1,
+                defval: "",
+              });
+              const MAX_ROWS = 50;
+              const previewRows = rows.slice(0, MAX_ROWS);
+              const cols = previewRows.length
+                ? Math.max(...previewRows.map((r) => r.length))
+                : 0;
+              const totalNote =
+                rows.length > MAX_ROWS
+                  ? `Showing first ${MAX_ROWS} of ${rows.length} rows`
+                  : `${rows.length} row${rows.length === 1 ? "" : "s"}`;
+              const title =
+                wb.SheetNames.length > 1
+                  ? wb.SheetNames.map(
+                      (n) =>
+                        `<button type="button" class="btn btn-sm py-0 px-2 ${n === sheetName ? "btn-primary" : "btn-outline-secondary"}" data-preview-sheet="${escapeHtml(n)}">${escapeHtml(n)}</button>`,
+                    ).join(" ")
+                  : `<strong>Preview: ${escapeHtml(sheetName)}</strong>`;
+              let html = `<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap px-2 py-1 small bg-light border-bottom" style="position:sticky;top:0;z-index:1;"><div class="d-flex flex-wrap gap-1">${title}</div><span class="text-muted">${totalNote}</span></div>`;
+              if (!rows.length) {
+                html +=
+                  '<div class="p-2 text-muted small">Sheet is empty.</div>';
+              } else {
                 html +=
                   '<table class="table table-sm table-bordered table-striped mb-0 small" style="font-size:0.78rem;"><tbody>';
                 previewRows.forEach((row, i) => {
@@ -3915,8 +3987,35 @@
                   html += "</tr>";
                 });
                 html += "</tbody></table>";
-                previewBox.style.display = "block";
-                previewBox.innerHTML = html;
+              }
+              previewBox.style.display = "block";
+              previewBox.innerHTML = html;
+              previewBox
+                .querySelectorAll("[data-preview-sheet]")
+                .forEach((btn) =>
+                  btn.addEventListener("click", (ev) =>
+                    render(wb, ev.currentTarget.dataset.previewSheet),
+                  ),
+                );
+            };
+
+            input.addEventListener("change", async (e) => {
+              const file = e.target.files && e.target.files[0];
+              if (!file) {
+                previewBox.style.display = "none";
+                previewBox.innerHTML = "";
+                return;
+              }
+              try {
+                const buf = await file.arrayBuffer();
+                const wb = XLSX.read(buf, { type: "array" });
+                if (!wb.SheetNames[0]) {
+                  previewBox.style.display = "block";
+                  previewBox.innerHTML =
+                    '<div class="p-2 text-muted small">Empty workbook.</div>';
+                  return;
+                }
+                render(wb, wb.SheetNames[0]);
               } catch (err) {
                 previewBox.style.display = "block";
                 previewBox.innerHTML = `<div class="p-2 text-danger small">Could not preview file: ${escapeHtml((err && err.message) || err)}</div>`;
@@ -3970,6 +4069,201 @@
           }
         },
 
+        /**
+         * "Choose sheets → preview → upload" for the LOE. Once Design picks a
+         * file, the backend reads every sheet (nothing is saved) and reports
+         * what it would import. Each LOE sheet gets a tick box — all ticked
+         * to start with — and a tab showing the rows it would bring in, so a
+         * wrong file or a sheet with unreadable columns is caught before the
+         * upload. Sheets that aren't an LOE are listed but can't be ticked.
+         */
+        initLoeSheetPicker() {
+          this._loeSheetPick = null;
+          const input = document.getElementById("actLoeFile");
+          const host = document.getElementById("loeSheetPicker");
+          if (!input || !host) return;
+          input.addEventListener("change", async () => {
+            this._loeSheetPick = null;
+            const file = input.files[0];
+            if (!file) {
+              host.innerHTML = "";
+              return;
+            }
+            host.innerHTML = `<div class="text-muted small py-2"><i class="fa fa-spinner fa-spin me-1"></i>Reading the sheets in ${this._esc(file.name)}…</div>`;
+            try {
+              const fd = new FormData();
+              fd.append("loeFile", file);
+              const res = await fetch(`${API_URL}/kickoffRoutes/previewLoe`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body: fd,
+              });
+              const data = await res.json();
+              if (!res.ok || !data.success)
+                throw new Error(data.message || "Could not read the LOE.");
+              if (input.files[0] !== file) return; // a newer pick took over
+              const sheets = data.sheets || [];
+              this._loeSheetPick = {
+                file,
+                sheets,
+                selected: sheets.filter((sh) => sh.ok).map((sh) => sh.name),
+                showing: (sheets.find((sh) => sh.ok) || {}).name || null,
+              };
+              this.renderLoeSheetPicker();
+            } catch (err) {
+              host.innerHTML = `<div class="alert alert-danger small py-2 mb-0">${this._esc(err.message || err)}</div>`;
+            }
+          });
+        },
+
+        renderLoeSheetPicker() {
+          const host = document.getElementById("loeSheetPicker");
+          const pick = this._loeSheetPick;
+          if (!host || !pick) return;
+          const esc = (v) => this._esc(v);
+          const okSheets = pick.sheets.filter((sh) => sh.ok);
+          if (!okSheets.length) {
+            host.innerHTML = `<div class="alert alert-danger small py-2 mb-0"><i class="fa fa-triangle-exclamation me-1"></i>No sheet in this file looks like an LOE (no SR No / Assembly header found). ${pick.sheets
+              .map((sh) => `<div class="mt-1"><strong>${esc(sh.name)}:</strong> ${esc(sh.error || "")}</div>`)
+              .join("")}</div>`;
+            return;
+          }
+          const totalRows = okSheets
+            .filter((sh) => pick.selected.includes(sh.name))
+            .reduce((n, sh) => n + sh.rowCount, 0);
+          // Two ticked tabs that would both be "Terminal" (say) can't both
+          // be uploaded — the portal couldn't tell them apart.
+          pick.clash = this.loeLabelClash(
+            okSheets.filter((sh) => pick.selected.includes(sh.name)),
+          );
+
+          const list = pick.sheets
+            .map((sh) => {
+              const id = `loeSheet_${pick.sheets.indexOf(sh)}`;
+              if (!sh.ok)
+                return `<div class="d-flex align-items-start gap-2 py-1 text-muted small">
+                    <input class="form-check-input mt-1" type="checkbox" disabled>
+                    <div><span class="fw-semibold">${esc(sh.name)}</span> — not an LOE sheet <span class="fst-italic">(${esc(sh.error || "")})</span></div>
+                  </div>`;
+              const sections = Object.entries(sh.sections || {})
+                .filter(([k]) => k)
+                .map(([k, n]) => `${esc(k)} (${n})`)
+                .join(", ");
+              const label = sh.label || sh.name;
+              return `<div class="d-flex align-items-start gap-2 py-1">
+                  <input class="form-check-input mt-1 loe-sheet-tick" type="checkbox" id="${id}" data-sheet="${esc(sh.name)}"${pick.selected.includes(sh.name) ? " checked" : ""}>
+                  <label class="small mb-0" for="${id}" style="cursor:pointer">
+                    <span class="fw-semibold">${esc(label)}</span>${label !== sh.name ? ` <span class="text-muted" style="font-size:0.72rem">(tab "${esc(sh.name)}")</span>` : ""}
+                    <span class="text-muted">— ${sh.rowCount} assembl${sh.rowCount === 1 ? "y" : "ies"}, ${sh.docCount} with Doc No</span>
+                    ${sections ? `<div class="text-muted" style="font-size:0.75rem">Sections: ${sections}</div>` : ""}
+                    ${(sh.warnings || []).map((w) => `<div class="text-warning-emphasis" style="font-size:0.75rem"><i class="fa fa-triangle-exclamation me-1"></i>${esc(w)}</div>`).join("")}
+                  </label>
+                </div>`;
+            })
+            .join("");
+
+          const showing = okSheets.find((sh) => sh.name === pick.showing) || okSheets[0];
+          const tabs = okSheets
+            .map(
+              (sh) =>
+                `<button type="button" class="btn btn-sm ${sh.name === showing.name ? "btn-primary" : "btn-outline-secondary"} loe-sheet-tab" data-sheet="${esc(sh.name)}">${esc(sh.label || sh.name)}${pick.selected.includes(sh.name) ? "" : ' <span class="badge bg-light text-muted">not uploading</span>'}</button>`,
+            )
+            .join("");
+          const rows = (showing.sample || [])
+            .map(
+              (r) => `<tr${/^\d+$/.test(String(r.srNo || "").trim()) ? ' class="table-warning"' : ""}>
+                  <td>${esc(r.srNo)}</td><td>${esc(r.section)}</td><td>${esc(r.assemblyName)}</td>
+                  <td>${r.drawingDocNo ? esc(r.drawingDocNo) : '<span class="text-danger">—</span>'}</td>
+                  <td>${esc(r.qty)}</td><td>${esc(r.designStatus)}</td>
+                </tr>`,
+            )
+            .join("");
+
+          host.innerHTML = `
+            <div class="border rounded p-2 mb-2">
+              <div class="fw-bold small mb-1"><i class="fa fa-layer-group me-1"></i>Sheets in this file — tick the ones that make up the LOE</div>
+              ${list}
+              <div class="small mt-1 ${pick.selected.length && !pick.clash ? "text-success" : "text-danger"}">
+                ${
+                  pick.clash
+                    ? esc(pick.clash)
+                    : pick.selected.length
+                      ? `Uploading ${pick.selected.length} sheet${pick.selected.length === 1 ? "" : "s"} (${okSheets
+                          .filter((sh) => pick.selected.includes(sh.name))
+                          .map((sh) => esc(sh.label || sh.name))
+                          .join(", ")}), ${totalRows} assemblies.`
+                      : "No sheet ticked — tick at least one."
+                }
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-1 mb-1">${tabs}</div>
+            <div class="border rounded" style="max-height:38vh;overflow:auto;background:#fff">
+              <table class="table table-sm table-bordered mb-0 small" style="font-size:0.78rem">
+                <thead class="table-light" style="position:sticky;top:0">
+                  <tr><th>SR</th><th>Section</th><th>Assembly</th><th>Drawing / Doc No</th><th>Qty</th><th>Design Status</th></tr>
+                </thead>
+                <tbody>${rows || '<tr><td colspan="6" class="text-muted text-center">No rows</td></tr>'}</tbody>
+              </table>
+            </div>
+            <div class="text-muted mt-1" style="font-size:0.72rem">This is exactly what will be imported from <strong>${esc(showing.label || showing.name)}</strong> (${showing.rowCount} assemblies). Check the Doc No column — drawings and BOMs are matched on it.</div>`;
+
+          host.querySelectorAll(".loe-sheet-tick").forEach((box) =>
+            box.addEventListener("change", (e) => {
+              const name = e.currentTarget.dataset.sheet;
+              // Keep the workbook's own sheet order, whatever order they're ticked in.
+              const ticked = new Set(pick.selected);
+              if (e.currentTarget.checked) ticked.add(name);
+              else ticked.delete(name);
+              pick.selected = pick.sheets
+                .map((sh) => sh.name)
+                .filter((n) => ticked.has(n));
+              this.renderLoeSheetPicker();
+            }),
+          );
+          host.querySelectorAll(".loe-sheet-tab").forEach((btn) =>
+            btn.addEventListener("click", (e) => {
+              pick.showing = e.currentTarget.dataset.sheet;
+              this.renderLoeSheetPicker();
+            }),
+          );
+        },
+
+        /**
+         * The portal name of an LOE sheet: a tab mentioning Terminal, Furnace
+         * or SPM (any case, any extra text) is just that; any other tab keeps
+         * its own name. Same rule as loeSheetLabel in backend/utils/loeParser.js.
+         */
+        loeSheetLabel(name) {
+          const raw = String(name == null ? "" : name).trim();
+          const low = raw.toLowerCase();
+          if (low.includes("terminal")) return "Terminal";
+          if (low.includes("furnace")) return "Furnace";
+          if (low.includes("spm")) return "SPM";
+          return raw;
+        },
+
+        // The message to show when two of `sheets` would get the same portal
+        // name, else "".
+        loeLabelClash(sheets) {
+          const seen = new Map();
+          for (const sh of sheets) {
+            const label = sh.label || this.loeSheetLabel(sh.name);
+            const key = label.toLowerCase();
+            if (seen.has(key))
+              return `"${seen.get(key)}" and "${sh.name}" would both be the ${label} sheet — untick one of them.`;
+            seen.set(key, sh.name);
+          }
+          return "";
+        },
+
+        _esc(v) {
+          return String(v == null ? "" : v).replace(
+            /[&<>"']/g,
+            (c) =>
+              ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+          );
+        },
+
         async loadLoePreview(projectId, containerId, opts = {}) {
           // Render the project's LOE workbook as an HTML table inside an
           // existing <div id="containerId"> so reviewers can see the sheet
@@ -4008,7 +4302,26 @@
             }
             const buf = await fileRes.arrayBuffer();
             const wb = XLSX.read(buf, { type: "array" });
-            const sheetName = wb.SheetNames[0];
+            // The sheets that make up this project's LOE — several on a
+            // multi-sheet LOE (Terminal / Furnace / SPM…), shown as tabs.
+            const project = (this.data || []).find(
+              (x) => String(x._id) === String(projectId),
+            );
+            const tabFor = (label) =>
+              wb.SheetNames.find(
+                (t) =>
+                  this.loeSheetLabel(t).toLowerCase() ===
+                  this.loeSheetLabel(label).toLowerCase(),
+              ) || null;
+            const loeSheets = ((project && project.loeSheets) || [])
+              .map(tabFor)
+              .filter(Boolean);
+            const sheetList = loeSheets.length
+              ? loeSheets
+              : wb.SheetNames.slice(0, 1);
+            const sheetName = sheetList.includes(opts.sheet)
+              ? opts.sheet
+              : sheetList[0];
             if (!sheetName) {
               container.innerHTML =
                 '<div class="p-2 text-muted small">Empty workbook.</div>';
@@ -4032,7 +4345,16 @@
               rows.length > MAX_ROWS
                 ? `Showing first ${MAX_ROWS} of ${rows.length} rows`
                 : `${rows.length} row${rows.length === 1 ? "" : "s"}`;
-            let html = `<div class="d-flex justify-content-between align-items-center px-2 py-1 small bg-light border-bottom" style="position:sticky;top:0;z-index:2;"><strong>${escapeHtml(sheetName)}</strong><span class="text-muted">${totalNote}</span></div>`;
+            const sheetTabs =
+              sheetList.length > 1
+                ? sheetList
+                    .map(
+                      (n) =>
+                        `<button type="button" class="btn btn-sm py-0 px-2 ${n === sheetName ? "btn-primary" : "btn-outline-secondary"}" data-loe-sheet="${escapeHtml(n)}">${escapeHtml(this.loeSheetLabel(n))}</button>`,
+                    )
+                    .join(" ")
+                : `<strong>${escapeHtml(sheetName)}</strong>`;
+            let html = `<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap px-2 py-1 small bg-light border-bottom" style="position:sticky;top:0;z-index:2;"><div class="d-flex flex-wrap gap-1">${sheetTabs}</div><span class="text-muted">${totalNote}</span></div>`;
             html +=
               '<table class="table table-sm table-bordered table-striped mb-0 small" style="font-size:0.78rem;"><tbody>';
             previewRows.forEach((row) => {
@@ -4045,6 +4367,14 @@
             });
             html += "</tbody></table>";
             container.innerHTML = html;
+            container.querySelectorAll("[data-loe-sheet]").forEach((btn) =>
+              btn.addEventListener("click", (e) =>
+                this.loadLoePreview(projectId, containerId, {
+                  ...opts,
+                  sheet: e.currentTarget.dataset.loeSheet,
+                }),
+              ),
+            );
           } catch (err) {
             container.innerHTML = `<div class="p-2 text-danger small">Could not preview LOE: ${escapeHtml(err.message || err)}</div>`;
           }
@@ -5779,5 +6109,43 @@
         XLSX.writeFile(wb, "Planning_Sample_Template.xlsx");
       }
     </script>
-  </body>
+  <!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+</body>
 </html>
