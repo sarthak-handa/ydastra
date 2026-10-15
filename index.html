@@ -1394,6 +1394,9 @@
               onclick="event.preventDefault(); showYDAstraView();">
               <i class="fa fa-cogs"></i>YDAstra
             </a>
+            <a href="library/index.html" target="_blank" class="btn" title="Reusable assemblies, BOMs and component drawings">
+              <i class="fa fa-book"></i>Library Drawings
+            </a>
             <button class="btn btn-tb-primary" id="btnNewProject" data-bs-toggle="modal" data-bs-target="#createModal">
               <i class="fa fa-plus"></i>Initiate New Project
             </button>
@@ -5044,6 +5047,7 @@
         + `</div><div class="input-group input-group-sm">`
         + `<input type="file" multiple accept=".pdf,.xlsx,.xls,.csv" class="form-control form-control-sm" id="drawingInput_${a._id}" title="Excel files are filed as BOMs; everything else as drawings">`
         + `<button type="button" class="btn btn-primary" onclick="uploadAssemblyDrawing('${a.projId}', ${a.loeIdx}, '${a._id}')"><i class="fa fa-upload me-1"></i>Upload</button>`
+        + `<button type="button" class="btn btn-outline-info" onclick="ydFetchFromLibrary('${a.projId}', ${a.loeIdx})" title="Fetch from Library"><i class="fa fa-book"></i></button>`
         + `</div>`;
 
       return `<tr class="${rowClasses}" data-assembly-id="${a._id}">`
@@ -5309,9 +5313,10 @@
       }
     };
 
-    window.openDrawingsModal = function (id) {
+    window.openDrawingsModal = async function (id) {
       const a = getAssembly(id);
       if (!a) return;
+      const libInfo = window.ydLibDescribe ? await window.ydLibDescribe(a.drawingFiles) : {};
 
       document.getElementById('drawingsModalTitle').innerHTML = `<i class="fa fa-drafting-compass me-2"></i>${escapeHtml(a.assemblyName)}`;
 
@@ -5328,6 +5333,29 @@
           <div class="list-group list-group-flush">`;
 
       a.drawingFiles.forEach((f, i) => {
+        if (window.ydIsLibraryDrawing && window.ydIsLibraryDrawing(f)) {
+          const r = libInfo[f._id] || {};
+          const label = r.ok ? (r.revision.originalFilename || f.originalName) : f.originalName;
+          bodyHtml += `
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                  <div class="d-flex align-items-center flex-grow-1 me-3">
+                      <input class="form-check-input me-3 dwg-checkbox" type="checkbox" value="${f._id}">
+                      <span class="text-muted me-2" style="width:24px;">${i + 1}.</span>
+                      <a href="#" class="text-decoration-none text-truncate fw-bold text-dark" onclick="viewPdf('${a.projId}', ${a.loeIdx}, '${f._id}')">
+                          <i class="fa fa-book text-info me-1"></i>${escapeHtml(label)}
+                      </a>
+                      <span class="badge bg-info text-dark ms-2">Library${r.ok ? ' · Rev ' + escapeHtml(r.revision.revisionLabel) : ''}</span>
+                      ${f.componentRef ? `<span class="badge bg-light text-dark border ms-1">${escapeHtml(f.componentRef)}</span>` : ''}
+                      ${r.note ? `<span class="text-danger small ms-2"><i class="fa fa-triangle-exclamation me-1"></i>${escapeHtml(r.note)}</span>` : ''}
+                  </div>
+                  <div class="btn-group btn-group-sm">
+                      <button class="btn btn-outline-info" onclick="viewPdf('${a.projId}', ${a.loeIdx}, '${f._id}')" title="View current library revision"><i class="fa fa-eye"></i></button>
+                      <button class="btn btn-outline-primary" onclick="downloadSingleDwg('${a.projId}', ${a.loeIdx}, '${f._id}')" title="Download"><i class="fa fa-download"></i></button>
+                      <button class="btn btn-outline-danger" onclick="deleteMockFile('${a.projId}', ${a.loeIdx}, '${f._id}')" title="Unlink from Library (the library drawing is kept)"><i class="fa fa-link-slash"></i></button>
+                  </div>
+              </div>`;
+          return;
+        }
         bodyHtml += `
               <div class="list-group-item d-flex justify-content-between align-items-center">
                   <div class="d-flex align-items-center flex-grow-1 me-3">
@@ -5359,6 +5387,7 @@
       let proj = pData.find(p => p.id == projId);
       if (!proj) return;
       let fileObj = proj.loeData[loeIdx].drawingFiles.find(f => f._id === fileId);
+      if (fileObj && window.ydIsLibraryDrawing && window.ydIsLibraryDrawing(fileObj)) { window.ydLibDownload(fileObj); return; }
       if (!fileObj || !fileObj.fileData) {
         Swal.fire('Error', 'File data not found. It might be a dummy file.', 'error');
         return;
@@ -5393,7 +5422,10 @@
       let toBlobFn = window.dataUrlToBlob || (typeof dataUrlToBlob === 'function' ? dataUrlToBlob : null);
       selected.forEach((fileId, index) => {
         let fileObj = proj.loeData[loeIdx].drawingFiles.find(f => f._id === fileId);
-        if (fileObj && fileObj.fileData) {
+        if (fileObj && window.ydIsLibraryDrawing && window.ydIsLibraryDrawing(fileObj)) {
+          setTimeout(() => window.ydLibDownload(fileObj), index * 300);
+          count++;
+        } else if (fileObj && fileObj.fileData) {
           setTimeout(() => {
             const blob = toBlobFn ? toBlobFn(fileObj.fileData) : null;
             if (blob) {
@@ -5424,6 +5456,7 @@
 
       let fileObj = proj.loeData[loeIdx].drawingFiles.find(f => f._id === fileId);
       if (!fileObj) return;
+      if (window.ydIsLibraryDrawing && window.ydIsLibraryDrawing(fileObj)) { window.ydLibOpenPdf(fileObj); return; }
 
       let fileName = fileObj.originalName || 'document.pdf';
       let toBlobFn = window.dataUrlToBlob || (typeof dataUrlToBlob === 'function' ? dataUrlToBlob : null);
@@ -5447,6 +5480,8 @@
       let pData = window.projectsData || (typeof projectsData !== 'undefined' ? projectsData : []);
       let proj = pData.find(p => p.id == projId);
       if (proj && proj.loeData && proj.loeData[loeIdx]) {
+        let removed = proj.loeData[loeIdx].drawingFiles.find(f => f._id === fileId);
+        if (removed && window.ydLibUnlink) await window.ydLibUnlink(removed);
         proj.loeData[loeIdx].drawingFiles = proj.loeData[loeIdx].drawingFiles.filter(f => f._id !== fileId);
         let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
         if (saveFn) await saveFn();
@@ -5456,7 +5491,7 @@
 
         openProjectDrawings(projId); // Refresh table
         loadProjectsData(); // Refresh grid silently
-        Swal.fire({ icon: 'info', title: 'Drawing Deleted', timer: 1500, showConfirmButton: false });
+        Swal.fire({ icon: 'info', title: removed && removed.source === 'library' ? 'Library link removed' : 'Drawing Deleted', timer: 1500, showConfirmButton: false });
       }
     };
 
@@ -5946,6 +5981,269 @@
       }
     });
 
+    // ================================================================
+    // LIBRARY DRAWINGS LINK (library/index.html <-> project drawings)
+    // ----------------------------------------------------------------
+    // A project row can LINK to a drawing kept in the Library instead of
+    // storing its own copy. The link is a normal drawingFiles entry:
+    //   { _id, source: 'library', libraryDrawingId, libraryComponentId,
+    //     libraryUsageId, componentRef, componentName, originalName }
+    // It is resolved to the drawing's CURRENT revision every time it is
+    // opened, so a new library revision reaches every linked project.
+    // Directly uploaded drawings (with fileData) are untouched.
+    //
+    // The Library keeps its data in its own IndexedDB database on the same
+    // browser origin: key 'library' in store 'state' (assemblies, components,
+    // drawings, revisions, usages…) and one Blob per file in store 'files'.
+    // Each link is also recorded as a usage there, so the Library page
+    // shows which projects use a drawing.
+    // ================================================================
+    (function (w) {
+      'use strict';
+
+      const LIB_DB = 'yd-library-demo-v1'; // name kept so existing library data stays reachable
+      const LIB_PAGE = 'library/index.html';
+
+      function libOpen() {
+        return new Promise((res, rej) => {
+          const r = indexedDB.open(LIB_DB, 1);
+          r.onupgradeneeded = () => { r.result.createObjectStore('state'); r.result.createObjectStore('files'); };
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => rej(r.error);
+        });
+      }
+
+      async function libGet(store, key) {
+        const db = await libOpen();
+        return new Promise((res, rej) => {
+          const q = db.transaction(store, 'readonly').objectStore(store).get(key);
+          q.onsuccess = () => res(q.result);
+          q.onerror = () => rej(q.error);
+        });
+      }
+
+      // Read-modify-write of the library state in one transaction
+      async function libUpdate(mutate) {
+        const db = await libOpen();
+        return new Promise((res, rej) => {
+          const tx = db.transaction('state', 'readwrite');
+          const st = tx.objectStore('state');
+          let out, err;
+          const g = st.get('library');
+          g.onsuccess = () => {
+            const s = g.result;
+            if (!s) { err = new Error('The Library is empty.'); tx.abort(); return; }
+            try { out = mutate(s); } catch (e) { err = e; tx.abort(); return; }
+            s.version = (s.version || 0) + 1;
+            st.put(s, 'library');
+          };
+          tx.oncomplete = () => res(out);
+          tx.onerror = tx.onabort = () => rej(err || tx.error || new Error('Library update failed.'));
+        });
+      }
+
+      const isLib = f => f && f.source === 'library';
+      w.ydIsLibraryDrawing = isLib;
+
+      // { ok, drawing, revision, component, note }
+      function resolveIn(s, f) {
+        const d = s && (s.drawings || []).find(x => x.id === f.libraryDrawingId);
+        if (!d) return { ok: false, note: 'Library drawing no longer exists' };
+        const rev = (s.revisions || []).find(r => r.id === d.currentRevisionId);
+        const comp = (s.components || []).find(c => c.id === d.componentId) || null;
+        if (!rev) return { ok: false, drawing: d, component: comp, note: 'Library drawing has no revision' };
+        return { ok: true, drawing: d, revision: rev, component: comp, note: d.status === 'archived' ? 'Archived in the Library' : '' };
+      }
+
+      // For list rendering: { [_id]: resolution } for every library entry
+      w.ydLibDescribe = async function (files) {
+        const out = {};
+        const libs = (files || []).filter(isLib);
+        if (!libs.length) return out;
+        let s = null;
+        try { s = await libGet('state', 'library'); } catch (e) { console.error('Library read failed', e); }
+        libs.forEach(f => { out[f._id] = s ? resolveIn(s, f) : { ok: false, note: 'Library storage not available in this browser' }; });
+        return out;
+      };
+
+      async function currentBlob(f) {
+        const s = await libGet('state', 'library');
+        const r = resolveIn(s, f);
+        if (!r.ok) throw new Error(r.note);
+        const blob = await libGet('files', r.revision.fileId);
+        if (!blob) throw new Error('The library file is missing from storage.');
+        return { blob: blob, name: r.revision.originalFilename || f.originalName || 'drawing.pdf', rev: r.revision.revisionLabel };
+      }
+
+      w.ydLibOpenPdf = async function (f) {
+        try {
+          const { blob, name, rev } = await currentBlob(f);
+          const url = URL.createObjectURL(blob);
+          $('#pdfViewerTitle').html(`<i class="fa fa-book text-info me-2"></i> ${escapeHtml(name)} <span class="badge bg-info text-dark ms-2">Library · Rev ${escapeHtml(rev)}</span> <a href="${url}" download="${escapeHtml(name)}" class="btn btn-sm btn-outline-light ms-3"><i class="fa fa-download me-1"></i>Download</a>`);
+          $('#pdfViewerContainer').html(`<object data="${url}" type="${blob.type || 'application/pdf'}" style="width: 100%; height: 100%; border: none;"><iframe src="${url}" style="width: 100%; height: 100%; border: none;"></iframe></object>`);
+          $('#pdfViewerModal').modal('show');
+        } catch (e) {
+          Swal.fire('Library drawing unavailable', e.message || String(e), 'error');
+        }
+      };
+
+      w.ydLibDownload = async function (f) {
+        try {
+          const { blob, name } = await currentBlob(f);
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } catch (e) {
+          Swal.fire('Library drawing unavailable', e.message || String(e), 'error');
+        }
+      };
+
+      // Removing a link from a project marks its library usage inactive;
+      // the library drawing itself is never deleted from here.
+      w.ydLibUnlink = async function (f) {
+        if (!isLib(f) || !f.libraryUsageId) return;
+        try {
+          await libUpdate(s => {
+            const u = (s.usages || []).find(x => x.id === f.libraryUsageId);
+            if (u && u.status === 'active') {
+              u.status = 'inactive';
+              u.deactivatedAt = new Date().toISOString();
+              (s.activity = s.activity || []).unshift({ id: 'act_' + Date.now(), at: u.deactivatedAt, by: 'YD Projects', action: 'unlink', entity: 'usage', detail: `${u.projectId} ${u.projectComponentRef}` });
+            }
+          });
+        } catch (e) { console.error('Library unlink failed', e); }
+      };
+
+      // ---- "Fetch from Library" picker ----
+      function libraryRows(s) {
+        const by = (arr, id) => (arr || []).find(x => x.id === id) || null;
+        return (s.drawings || []).filter(d => d.status !== 'archived').map(d => {
+          const rev = by(s.revisions, d.currentRevisionId);
+          const c = by(s.components, d.componentId);
+          if (!rev || !c || c.status === 'archived') return null;
+          const sub = by(s.subassemblies, c.subassemblyId), asm = by(s.assemblies, c.assemblyId);
+          return {
+            drawing: d, rev: rev, comp: c, sub: sub, asm: asm,
+            hay: [asm && asm.code, asm && asm.name, sub && sub.code, sub && sub.name, c.code, c.name, c.drawingNumber, d.drawingNumber, d.title, c.material].join(' ').toLowerCase()
+          };
+        }).filter(Boolean).sort((a, b) => String(a.comp.code).localeCompare(String(b.comp.code), undefined, { numeric: true }));
+      }
+
+      const norm = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+      w.ydFetchFromLibrary = async function (projId, loeIdx) {
+        const proj = (w.projectsData || []).find(p => p.id == projId);
+        const lr = proj && proj.loeData && proj.loeData[loeIdx];
+        if (!lr) return;
+        let s;
+        try { s = await libGet('state', 'library'); } catch (e) { return Swal.fire('Library unavailable', 'Could not read the Library storage in this browser: ' + (e.message || e), 'error'); }
+        const rows = s ? libraryRows(s) : [];
+        if (!rows.length) {
+          return Swal.fire({ icon: 'info', title: 'No library drawings yet', html: `Add assemblies, BOMs and component drawings on the <a href="${LIB_PAGE}" target="_blank">Library Drawings</a> page first.` });
+        }
+
+        const sr = String(lr.srNo || '').trim();
+        const targets = [{ ref: sr, name: lr.assemblyName || '', dwg: lr.drawingNo || lr.drawingDocNo || '', label: `${sr} — ${lr.assemblyName || 'this row'} (whole row)` }]
+          .concat((lr.subtasks || []).map((st, i) => ({ ref: sr + '.' + (i + 1), name: st.component || '', dwg: st.drawingNo || '', label: `${sr}.${i + 1} — ${st.component || 'Component'}${st.drawingNo ? ' (' + st.drawingNo + ')' : ''}` })));
+
+        const html = `
+          <div class="text-start">
+            <label class="form-label small fw-bold mb-1">Link to project item</label>
+            <select id="ydLibTarget" class="form-select form-select-sm mb-2">${targets.map((t, i) => `<option value="${i}">${escapeHtml(t.label)}</option>`).join('')}</select>
+            <input id="ydLibSearch" type="search" class="form-control form-control-sm mb-2" placeholder="Search assembly, subassembly, component no., name, drawing no.…">
+            <div style="max-height: 52vh; overflow: auto;" class="border rounded">
+              <table class="table table-sm table-hover mb-0 small align-middle">
+                <thead class="table-light" style="position: sticky; top: 0;"><tr>
+                  <th></th><th>Assembly</th><th>Subassembly</th><th>Component</th><th>Drawing No.</th><th>Rev</th><th>Material</th>
+                </tr></thead>
+                <tbody id="ydLibRows"></tbody>
+              </table>
+            </div>
+          </div>`;
+
+        const draw = () => {
+          const t = targets[+$('#ydLibTarget').val()];
+          const q = String($('#ydLibSearch').val() || '').toLowerCase().trim();
+          const tn = norm(t.dwg), tc = norm(t.name);
+          const list = rows.map((r, i) => ({ r, i, match: (tn && (norm(r.comp.drawingNumber) === tn || norm(r.drawing.drawingNumber) === tn)) || (tc && norm(r.comp.name) === tc) }))
+            .filter(x => !q || x.r.hay.includes(q))
+            .sort((a, b) => (b.match - a.match));
+          const checked = $('input[name="ydLibPick"]:checked').val();
+          $('#ydLibRows').html(list.length ? list.map(({ r, i, match }) => `
+            <tr style="cursor:pointer" onclick="this.querySelector('input').checked = true">
+              <td><input type="radio" name="ydLibPick" value="${i}" ${String(i) === checked ? 'checked' : ''}></td>
+              <td>${escapeHtml(r.asm ? r.asm.code + ' ' + r.asm.name : '—')}</td>
+              <td>${escapeHtml(r.sub ? r.sub.code + ' ' + r.sub.name : '—')}</td>
+              <td><b>${escapeHtml(r.comp.code)}</b> ${escapeHtml(r.comp.name || r.drawing.title || '')}${match ? ' <span class="badge bg-success">Match</span>' : ''}</td>
+              <td><code>${escapeHtml(r.drawing.drawingNumber || r.comp.drawingNumber || '')}</code></td>
+              <td>${escapeHtml(r.rev.revisionLabel)}</td>
+              <td>${escapeHtml(r.comp.material || '')}</td>
+            </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted py-3">No library drawing matches.</td></tr>');
+        };
+
+        const res = await Swal.fire({
+          title: `<i class="fa fa-book me-2"></i>Fetch from Library`,
+          html: html,
+          width: 1100,
+          showCancelButton: true,
+          confirmButtonText: 'Link drawing',
+          didOpen: () => {
+            draw();
+            $('#ydLibSearch').on('input', draw);
+            $('#ydLibTarget').on('change', draw);
+          },
+          preConfirm: () => {
+            const pick = $('input[name="ydLibPick"]:checked').val();
+            if (pick == null) { Swal.showValidationMessage('Select a library drawing'); return false; }
+            return { target: targets[+$('#ydLibTarget').val()], row: rows[+pick] };
+          }
+        });
+        if (!res.isConfirmed) return;
+        const { target, row } = res.value;
+
+        lr.drawingFiles = lr.drawingFiles || [];
+        if (lr.drawingFiles.some(f => isLib(f) && f.libraryDrawingId === row.drawing.id && f.componentRef === target.ref)) {
+          return Swal.fire('Already linked', `${target.ref} is already linked to this library drawing.`, 'info');
+        }
+
+        let usageId;
+        try {
+          usageId = await libUpdate(st => {
+            const t = new Date().toISOString();
+            const u = {
+              id: 'use_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)),
+              projectId: String(proj.projNo || proj.id), projectAssemblyId: String(proj.id), projectSubassemblyId: sr, projectComponentId: null,
+              projectComponentRef: target.ref, projectComponentName: target.name,
+              libraryAssemblyId: row.comp.assemblyId, librarySubassemblyId: row.comp.subassemblyId || null, libraryComponentId: row.comp.id, libraryDrawingId: row.drawing.id,
+              mappingMethod: 'explicit-user', linkedAt: t, linkedBy: 'YD Projects', status: 'active'
+            };
+            (st.usages = st.usages || []).push(u);
+            (st.activity = st.activity || []).unshift({ id: 'act_' + Date.now(), at: t, by: 'YD Projects', action: 'link', entity: 'usage', detail: `${u.projectId} ${u.projectComponentRef} → library ${row.comp.code}` });
+            return u.id;
+          });
+        } catch (e) {
+          return Swal.fire('Could not link', e.message || String(e), 'error');
+        }
+
+        lr.drawingFiles.push({
+          _id: 'lib_' + Date.now() + Math.floor(Math.random() * 1000),
+          source: 'library',
+          libraryDrawingId: row.drawing.id,
+          libraryComponentId: row.comp.id,
+          libraryUsageId: usageId,
+          componentRef: target.ref,
+          componentName: target.name,
+          originalName: row.rev.originalFilename || (row.drawing.drawingNumber || row.comp.code) + '.pdf',
+          linkedAt: new Date().toISOString()
+        });
+        await w.saveProjects();
+        if (typeof openProjectDrawings === 'function') openProjectDrawings(projId);
+        Swal.fire({ icon: 'success', title: 'Linked to Library', text: `${target.ref} now shows library drawing ${row.comp.code} (Rev ${row.rev.revisionLabel}). Future library revisions appear here automatically.`, timer: 2600, showConfirmButton: false });
+      };
+    })(window);
     // ================================================================
     // YDASTRA — PROCUREMENT MODULE (Projects team, after BOM upload)
     // ----------------------------------------------------------------
