@@ -1149,30 +1149,25 @@
       border-color: var(--yd-red) !important;
     }
 
-    .ydc-stage-badge-sap {
-      background: #6610f2;
-      color: #fff;
-    }
-
-    .ydc-stage-badge-fab {
-      background: #fd7e14;
-      color: #fff;
-    }
-
-    .ydc-stage-badge-mach {
-      background: #0dcaf0;
-      color: #000;
-    }
-
-    .ydc-stage-badge-arr {
-      background: #20c997;
-      color: #fff;
-    }
-
-    .ydc-stage-badge-asm {
-      background: #198754;
-      color: #fff;
-    }
+    /* YDAstra procurement: row confidence colours */
+    #ydcExcelTable tr.ydc-c-green > td { background: #f1faf4; }
+    #ydcExcelTable tr.ydc-c-yellow > td { background: #fff8e5; }
+    #ydcExcelTable tr.ydc-c-red > td { background: #fdeeee; }
+    #ydcExcelTable tr.ydc-c-green > td:first-child { box-shadow: inset 3px 0 0 #2f9e62; }
+    #ydcExcelTable tr.ydc-c-yellow > td:first-child { box-shadow: inset 3px 0 0 #e0a100; }
+    #ydcExcelTable tr.ydc-c-red > td:first-child { box-shadow: inset 3px 0 0 #d14343; }
+    .ydc-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: 0; }
+    .ydc-dot.g { background: #2f9e62; }
+    .ydc-dot.y { background: #e0a100; }
+    .ydc-dot.r { background: #d14343; }
+    .ydc-count { font-size: 0.78rem; font-weight: 600; color: #374151; }
+    .ydc-legend { display: flex; gap: 18px; font-size: 0.75rem; color: #6b7280; margin-bottom: 6px; }
+    .ydc-idstrip { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .ydc-idbox { min-width: 190px; border-radius: 6px; }
+    .ydc-idbox label { display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 2px; }
+    .ydc-idbox.ydc-c-green input { border-color: #2f9e62; }
+    .ydc-idbox.ydc-c-yellow input { border-color: #e0a100; }
+    .ydc-idbox.ydc-c-red input { border-color: #d14343; }
 
     .ydc-breadcrumb {
       font-size: 0.8rem;
@@ -1395,7 +1390,7 @@
               onclick="event.preventDefault(); showDrawingsView();">
               <i class="fa fa-clock"></i>Pending Drawings
             </a>
-            <a href="#" class="btn" title="YDAstra — Execution Control (available after LOE upload)"
+            <a href="#" class="btn" title="YDAstra — Procurement (available once a BOM is uploaded)"
               onclick="event.preventDefault(); showYDAstraView();">
               <i class="fa fa-cogs"></i>YDAstra
             </a>
@@ -1661,6 +1656,11 @@
               <div class="meta" id="ydcProjMeta"></div>
             </div>
             <div>
+              <span id="ydcLibraryStatus" class="me-2"></span>
+              <label class="btn btn-outline-primary btn-sm fw-bold mb-0 me-1" title="Upload the latest Products export from SAP">
+                <i class="fa fa-database me-1"></i>Update SAP library
+                <input type="file" accept=".xlsx,.xls" hidden onchange="ydcUploadLibrary(this)">
+              </label>
               <button class="btn btn-outline-secondary btn-sm fw-bold" onclick="showDashboardView()">
                 <i class="fa fa-arrow-left me-1"></i>Back to Kick-Off
               </button>
@@ -3838,7 +3838,7 @@
           else if (p.stage === 9) actionBtn = `<button class="btn btn-sm btn-danger fw-bold btn-dir-approve" data-id="${p.id}">Final Approval</button>`;
           else if (p.stage === 10) actionBtn = `<a class="btn btn-sm btn-success fw-bold text-white" href="#" data-id="${p.id}" onclick="event.preventDefault();event.stopPropagation();showDrawingsView('${p.id}')" title="View / manage assembly drawings"><i class="fa fa-drafting-compass me-1"></i>Drawings</a>`;
 
-          let ydcBtn = (p.stage >= 7) ? `<button class="btn btn-sm btn-outline-success fw-bold act-mini" data-id="${p.id}" onclick="event.stopPropagation();showYDAstraView(${p.id})" title="Open in YDAstra Execution"><i class="fa fa-cogs me-1"></i>YDAstra</button>` : '';
+          let ydcBtn = (window.ydcProjectHasBom && window.ydcProjectHasBom(p)) ? `<button class="btn btn-sm btn-outline-success fw-bold act-mini" data-id="${p.id}" onclick="event.stopPropagation();showYDAstraView(${p.id})" title="Open in YDAstra Execution"><i class="fa fa-cogs me-1"></i>YDAstra</button>` : '';
           let deleteBtn = `<button type="button" class="btn btn-sm btn-outline-danger btn-delete-proj" data-id="${p.id}" title="Delete project"><i class="fa fa-trash"></i></button>`;
 
           let rowHtml = `
@@ -5946,559 +5946,233 @@
       }
     });
 
-    // YDAstra BOM-to-SAP Bulk Paste Logic
-    $(document).on('paste', '.ydc-paste-target', function (e) {
-      var clipboardData = e.originalEvent.clipboardData || window.clipboardData;
-      var pastedData = clipboardData.getData('Text');
-      if (!pastedData) return;
-
-      var rows = pastedData.split(/\r\n|\n|\r/);
-      if (rows[rows.length - 1] === "") rows.pop();
-
-      if (rows.length <= 1 && pastedData.indexOf('\t') === -1) return;
-
-      e.preventDefault();
-
-      var startCol = parseInt($(this).data('col'));
-      var tbody = $(this).closest('tbody');
-      var startIdx = $(this).closest('tr').index();
-
-      for (var i = 0; i < rows.length; i++) {
-        var cols = rows[i].split('\t');
-        var trs = tbody.find('tr');
-        var tr = trs.eq(startIdx + i);
-
-        if (!tr.length) {
-          addYDCExcelRow();
-          trs = tbody.find('tr');
-          tr = trs.eq(startIdx + i);
-        }
-
-        let inputs = tr.find('.ydc-paste-target');
-        for (let j = 0; j < cols.length; j++) {
-          if (startCol + j < inputs.length) {
-            let inp = inputs.eq(startCol + j);
-            inp.val(cols[j].trim());
-            if (inp.hasClass('ydc-val-dwg') || inp.hasClass('ydc-val-comp')) {
-              recalcRowYS(inp[0]);
-            }
-          }
-        }
-      }
-    });
-
     // ================================================================
-    // YDASTRA EXECUTION MODULE
-    // Additive only. All new functions. Zero existing code modified.
+    // YDASTRA — PROCUREMENT MODULE (Projects team, after BOM upload)
+    // ----------------------------------------------------------------
+    // Per assembly (an LOE row whose BOM Design uploaded on Drawings):
+    //   Stage 1  BOM to SAP  – PM checks the auto-prepared YF code, WBS
+    //                          element, YS codes and YS descriptions.
+    //                          New codes go to the SAP team first.
+    //   Stage 2  SAP Check   – SAP team (Yashveer, Shivam) creates the
+    //                          new codes; then the PM submits the BOM.
+    //   Stage 3  Ordering    – PO / Jobwork per component.
+    //
+    // PROCUREMENT RECORD (stored on loeRow.procurement, never on the
+    // Design BOM itself, so a BOM re-upload does not wipe PM work):
+    //   { yfCode, yfDesc, wbs,            // '' = use the auto value
+    //     status: 'draft' | 'codesSent' | 'bomSubmitted',
+    //     sentSig, sentAt, submittedAt,   // sentSig = BOM fingerprint at send
+    //     rows: { [rowKey]: { ysCode, ysDesc, po1, po2, vendor1, vendor2,
+    //                         price1, price2, date1, date2, ready1, ready2 } },
+    //     newCodes: [{ kind: 'YS'|'YF', code, desc, rowKey, created, createdAt }] }
+    //
+    // SAP library (the "Products" export) and the PM's learned mappings
+    // live in their own IndexedDB keys. All storage access goes through
+    // YDStore below — the one block a backend port has to replace.
     // ================================================================
     (function (w) {
       'use strict';
 
-      // ---- Stage definitions (extend this array to add future stages) ----
-      const YDC_STAGES = [
-        { key: 'sap', label: 'SAP', icon: 'fa-barcode', color: '#6610f2', badgeCls: 'ydc-stage-badge-sap' },
-        { key: 'fabrication', label: 'Fabrication', icon: 'fa-industry', color: '#fd7e14', badgeCls: 'ydc-stage-badge-fab' },
-        { key: 'machining', label: 'Machining', icon: 'fa-cog', color: '#0dcaf0', badgeCls: 'ydc-stage-badge-mach' },
-        { key: 'arranging', label: 'Arranging', icon: 'fa-boxes-packing', color: '#20c997', badgeCls: 'ydc-stage-badge-arr' },
-        { key: 'assembly', label: 'Assembly', icon: 'fa-layer-group', color: '#198754', badgeCls: 'ydc-stage-badge-asm' }
-        // Future: purchase, qa, heatTreatment, painting, stores, dispatch, installation
+      const SAP_TEAM = 'SAP Team (Yashveer, Shivam)';
+      const MAX_CODE = 18, MAX_DESC = 40;
+
+      const STAGES = [
+        { key: 'sap', label: 'BOM to SAP' },
+        { key: 'sapCheck', label: 'SAP Check' },
+        { key: 'ordering', label: 'Ordering' }
       ];
 
-      // ---- Column definitions per stage ----
-      const YDC_COLS = {
-        sap: [
-          { key: 'description', label: 'Description', type: 'text', w: '160px' },
-          { key: 'sapCode', label: 'SAP Code', type: 'text', w: '110px' },
-          { key: 'sapDescription', label: 'SAP Description', type: 'text', w: '160px' },
-          { key: 'remarks', label: 'Remarks', type: 'text', w: '140px' }
-        ],
-        fabrication: [
-          { key: 'fabricationRequired', label: 'Fab. Req.', type: 'checkbox', w: '65px' },
-          { key: 'executionType', label: 'Type', type: 'select', w: '80px', options: ['', 'FIH', 'FBOI'] },
-          { key: 'personVendor', label: 'Person / Vendor', type: 'text', w: '140px' },
-          { key: 'jobIdOrPO', label: 'Job ID / PO', type: 'text', w: '110px' },
-          { key: 'releaseDate', label: 'Release Date', type: 'date', w: '130px' },
-          { key: 'remarks', label: 'Remarks', type: 'text', w: '130px' }
-        ],
-        machining: [
-          { key: 'executionType', label: 'Type', type: 'select', w: '80px', options: ['', 'MIH', 'MBOI'] },
-          { key: 'personVendor', label: 'Person / Vendor', type: 'text', w: '140px' },
-          { key: 'jobIdOrPO', label: 'Job ID / PO', type: 'text', w: '110px' },
-          { key: 'remarks', label: 'Remarks', type: 'text', w: '130px' }
-        ],
-        arranging: [],
-        assembly: []
+      // ================================================================
+      // DATA LAYER — replace these four functions to move to the server
+      // ================================================================
+      const YDStore = {
+        saveProjects: async function () {
+          let fn = w.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
+          if (fn) await fn();
+        },
+        loadLibrary: function () { return w.IDBStorage.get('ydSapLibrary'); },
+        saveLibrary: function (lib) { return w.IDBStorage.set('ydSapLibrary', lib); },
+        loadMemory: function () { return w.IDBStorage.get('ydCodeMemory'); },
+        saveMemory: function (mem) { return w.IDBStorage.set('ydCodeMemory', mem); }
       };
 
       // ---- Module state ----
       w._ydcState = { projId: null, loeIdx: null, stage: null };
 
-      // ---- Helpers ----
       function pData() { return w.projectsData || []; }
       function getP(id) { return pData().find(p => p.id == id); }
-      function isEligible(p) { return p && p.stage >= 7; }
+      function hasBom(lr) { return !!(lr && lr.subtasks && lr.subtasks.length); }
+      function isEligible(p) { return p && (p.loeData || []).some(hasBom); }
+      w.ydcProjectHasBom = isEligible;
       function esc(v) {
         return w.escapeHtml
           ? w.escapeHtml(v)
           : String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
       }
+      const clean = s => String(s == null ? '' : s).replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const alnum = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const today = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const toast = (title, icon) => Swal.fire({ toast: true, position: 'top-end', icon: icon || 'success', title: title, timer: 1600, showConfirmButton: false });
 
       function hideAllYDC() {
-        $('#ydAstraView').hide();
         $('#ydcProjectSummary').hide();
         $('#ydcAssemblyView').hide();
       }
 
-      // ---- Execution data: lazy init from Design BOM ----
-      function initExec(proj, loeIdx) {
-        if (!proj.execution) proj.execution = { assemblies: [] };
-        let found = proj.execution.assemblies.find(a => a.loeIdx === loeIdx);
-        if (found) return found;
-
-        let lr = proj.loeData && proj.loeData[loeIdx];
-        let subtasks = (lr && lr.subtasks && lr.subtasks.length) ? lr.subtasks : [];
-        let asm = { loeIdx: loeIdx, assemblyId: 'ass_' + proj.id + '_' + loeIdx };
-
-        YDC_STAGES.forEach(s => {
-          if (s.key === 'arranging' || s.key === 'assembly') { asm[s.key] = []; return; }
-          if (subtasks.length > 0) {
-            // Generate independent execution copies from Design BOM (BOM itself is never modified)
-            asm[s.key] = subtasks.map((st, i) => ({
-              componentId: 'comp_' + loeIdx + '_' + i,
-              component: st.component || '',
-              qty: st.qty || '',
-              material: st.material || '',
-              status: 'pending'
-            }));
-          } else {
-            // Bought-out assembly: one blank row so Add Row is available
-            asm[s.key] = [{ componentId: 'comp_' + loeIdx + '_' + Date.now(), component: '', qty: '', material: '', status: 'pending' }];
-          }
-        });
-
-        proj.execution.assemblies.push(asm);
-        return asm;
-      }
-
-      function getExec(proj, loeIdx) {
-        let found = proj.execution && proj.execution.assemblies.find(a => a.loeIdx === loeIdx);
-        return found || initExec(proj, loeIdx);
-      }
-
-      // ---- Stage / status helpers ----
-      function stageStatus(asm, key) {
-        let rows = asm[key] || [];
-        if (!rows.length) return 'pending';
-        let done = rows.filter(r => r.status === 'submitted').length;
-        if (!done) return 'pending';
-        return done === rows.length ? 'complete' : 'in_progress';
-      }
-
-      function statusBadge(s) {
-        return {
-          pending: '<span class="badge bg-secondary" style="font-size:0.7rem;">Pending</span>',
-          in_progress: '<span class="badge bg-warning text-dark" style="font-size:0.7rem;"><i class="fa fa-spinner fa-spin me-1"></i>In Progress</span>',
-          complete: '<span class="badge bg-success" style="font-size:0.7rem;"><i class="fa fa-check me-1"></i>Complete</span>'
-        }[s] || '<span class="badge bg-secondary" style="font-size:0.7rem;">Pending</span>';
+      function logHistory(proj, loeIdx, action, user) {
+        if (!proj.ydcHistory) proj.ydcHistory = [];
+        proj.ydcHistory.push({ loeIdx: loeIdx, timestamp: new Date().toISOString(), user: user || 'Project Manager', action: action });
       }
 
       // ================================================================
-      // VIEW 1: YDAstra Projects List
+      // SAP LIBRARY (Products export) + learned mappings
       // ================================================================
-      w.showYDAstraView = function (projId) {
-        $('#dashboardView').hide();
-        $('#drawingsView').hide();
-        $('.main').addClass('drawings-mode');
-        $('#navYdAscend').show();
-        hideAllYDC();
+      const LIB = { map: new Map(), fileName: '', loadedAt: '', count: 0, numIndex: null, items: null };
+      let MEMORY = {};
 
-        let eligs = pData().filter(isEligible);
+      function buildLibrary(saved) {
+        LIB.map = new Map();
+        LIB.numIndex = null;
+        LIB.items = null;
+        if (!saved || !saved.rows) { LIB.count = 0; return; }
+        saved.rows.forEach(r => LIB.map.set(r[0], { code: r[0], desc: r[1] || '', uom: r[2] || '', deleted: /^DELETE/i.test(r[1] || '') }));
+        (saved.extras || []).forEach(r => { if (!LIB.map.has(r[0])) LIB.map.set(r[0], { code: r[0], desc: r[1], uom: '', deleted: false, created: true }); });
+        LIB.fileName = saved.fileName || '';
+        LIB.loadedAt = saved.loadedAt || '';
+        LIB.count = saved.rows.length;
+      }
 
-        // Populate YDAstra project dropdown
-        let selectorHtml = '';
-        eligs.forEach(p => {
-          selectorHtml += `<option value="${p.id}">${p.projNo || 'TBD'} - ${escapeHtml(p.client || 'N/A')}</option>`;
-        });
-        $('#ydcProjectSelector').html(selectorHtml);
+      function libGet(code) { return code ? LIB.map.get(String(code).trim()) : null; }
 
-        let targetProjId = projId;
-        if (!targetProjId && eligs.length > 0) {
-          targetProjId = eligs[0].id;
-        }
+      // Codes from rules can differ from the master only in the grade suffix
+      // spacing ("FSNT07M30 G2") or a missing suffix ("FSNT38M48").
+      function libFind(code) {
+        if (!code) return null;
+        let tries = [code, code.replace(/ (G\d)$/, '$1'), code.replace(/(\d)(G\d)$/, '$1 $2'), code.replace(/ ?G\d$/, '')];
+        for (let c of tries) { let it = libGet(c); if (it && !it.deleted) return it; }
+        return null;
+      }
 
-        if (targetProjId) {
-          $('#ydcProjectSelector').val(targetProjId);
-          w.openYDAstraProject(targetProjId);
-        } else {
-          $('#ydcProjectSummary').fadeIn(200);
-          document.getElementById('ydcProjTitle').innerHTML = '<i class="fa fa-project-diagram me-2"></i> YDAstra';
-          document.getElementById('ydcProjMeta').innerHTML = '<span class="text-danger">No active projects found with LOE uploaded (Stage >= 7)</span>';
-          document.getElementById('ydcAssemblyGrid').innerHTML = '';
-        }
-      };
+      // Number-led search for bought-out items with no rule (bearings,
+      // oil seals, rotary unions...). Only YS/YF-free, non-deleted items.
+      const STOP = new Set(['MM', 'THK', 'LONG', 'MODEL', 'NO', 'DIA', 'SIZE', 'TYPE', 'WITH', 'AND', 'FOR', 'STD', 'MAKE', 'REV']);
+      const words = s => (String(s).toUpperCase().match(/[A-Z]{3,}/g) || []).filter(x => !STOP.has(x));
+      const nums = s => Array.from(new Set(String(s).match(/\d+(?:\.\d+)?/g) || [])).filter(n => n.replace('.', '').length >= 2);
 
-      w.openYDAstraProject = function (projId) {
-        let proj = getP(projId);
-        if (!proj) return;
-        w._ydcState.projId = projId;
-        w._ydcState.loeIdx = null;
-        w._ydcState.stage = null;
-
-        hideAllYDC();
-        $('#ydcProjectSummary').fadeIn(200);
-
-        document.getElementById('ydcProjTitle').innerHTML =
-          '<i class="fa fa-project-diagram me-2"></i> YD Astra panel (YD Component Planning)';
-        document.getElementById('ydcProjMeta').innerHTML =
-          '<strong>Project Number:</strong> ' + esc(proj.projNo || 'TBD') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
-          '<strong>Client:</strong> ' + esc(proj.client || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
-          '<strong>Site:</strong> ' + esc(proj.site || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
-          '<strong>Machine:</strong> ' + esc(proj.machine || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
-          '<strong>Project Manager (PM):</strong> ' + esc(proj.pm || 'TBD');
-
-        // Stats
-        let totalAsm = (proj.loeData || []).length;
-        let totalComp = 0, doneComp = 0;
-        (proj.loeData || []).forEach((lr, idx) => {
-          let a = proj.execution && proj.execution.assemblies.find(x => x.loeIdx === idx);
-          let comps = a ? (a.sap || []) : (lr.subtasks || []);
-          totalComp += comps.length;
-          if (a) doneComp += comps.filter(c => c.status === 'submitted').length;
-        });
-        let elAsm = document.getElementById('ydcStatAssemblies');
-        if (elAsm) elAsm.textContent = totalAsm;
-        let elComp = document.getElementById('ydcStatComponents');
-        if (elComp) elComp.textContent = totalComp;
-        let elDone = document.getElementById('ydcStatCompleted');
-        if (elDone) elDone.textContent = doneComp;
-        let elPending = document.getElementById('ydcStatPending');
-        if (elPending) elPending.textContent = totalComp - doneComp;
-
-        renderAsmGrid(proj);
-      };
-
-      w.ydcBackToProjects = function () {
-        if (w._ydcState.projId != null) w.openYDAstraProject(w._ydcState.projId);
-        else w.showYDAstraView();
-      };
-
-      w.openYDAstraAssemblyDetailsModal = function (projId, loeIdx) {
-        let proj = getP(projId);
-        if (!proj) return;
-        let lr = proj.loeData && proj.loeData[loeIdx];
-        if (!lr) return;
-
-        $('#ydcAsmDetName').text(lr.assemblyName || 'Assembly');
-        $('#ydcAsmDetMeta').html(`
-          <strong>Drawing No:</strong> ${esc(lr.drawingNo || '—')} &nbsp;&nbsp;|&nbsp;&nbsp;
-          <strong>Dispatch Week:</strong> ${esc(lr.dispatchWeek || '—')} &nbsp;&nbsp;|&nbsp;&nbsp;
-          <strong>Project No:</strong> ${esc(proj.projNo || 'TBD')}
-        `);
-
-        let a = proj.execution && proj.execution.assemblies.find(x => x.loeIdx === loeIdx);
-
-        let stepperHtml = '';
-        YDC_STAGES.forEach((s, idx) => {
-          let ss = a ? stageStatus(a, s.key) : 'pending';
-          let statusCls = '';
-          let icon = '<i class="fa fa-circle-notch opacity-25"></i>';
-          if (ss === 'complete') {
-            statusCls = 'completed';
-            icon = '<i class="fa fa-check"></i>';
-          } else if (ss === 'in_progress') {
-            statusCls = 'active';
-            icon = '<i class="fa fa-spinner fa-spin"></i>';
-          }
-
-          let label = s.label;
-          if (s.key === 'sap') label = 'SAP processing';
-
-          stepperHtml += `
-            <div class="stepper-item ${statusCls}">
-              <div class="step-counter">${icon}</div>
-              <div class="step-name">${label}</div>
-            </div>`;
-        });
-        $('#ydcAssemblyStepper').html(stepperHtml);
-
-        let historyHtml = '';
-        let history = proj.ydcHistory ? proj.ydcHistory.filter(h => h.loeIdx === loeIdx) : [];
-        if (history.length === 0) {
-          historyHtml = '<li class="list-group-item text-muted text-center py-3">No history events logged yet.</li>';
-        } else {
-          history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-          history.forEach(h => {
-            let dtStr = new Date(h.timestamp).toLocaleString();
-            historyHtml += `
-              <li class="list-group-item d-flex justify-content-between align-items-start py-2">
-                <div class="ms-2 me-auto">
-                  <div class="fw-bold">${esc(h.action)}</div>
-                  <span class="text-muted small">By ${esc(h.user || 'System')}</span>
-                </div>
-                <span class="badge bg-light text-dark border">${dtStr}</span>
-              </li>`;
-          });
-        }
-        $('#ydcAssemblyHistoryList').html(historyHtml);
-
-        $('#ydcAssemblyDetailsModal').modal('show');
-      };
-
-      window.toggleYdcRow = function (parentSr) {
-        let cleanSr = String(parentSr).trim().replace(/[^a-zA-Z0-9]/g, '');
-        let childClass = '.ydc-child-of-' + cleanSr;
-        let visible = $(childClass).is(':visible');
-        if (visible) {
-          $(childClass).hide();
-          $('#chevron_' + cleanSr).removeClass('fa-chevron-down').addClass('fa-chevron-right');
-        } else {
-          $(childClass).show();
-          $('#chevron_' + cleanSr).removeClass('fa-chevron-right').addClass('fa-chevron-down');
-        }
-      };
-
-      window.toggleAllYdcRows = function (btn) {
-        let icon = $(btn).find('i');
-        let isExpand = icon.hasClass('fa-plus');
-        if (isExpand) {
-          $('.ydc-sub-row').show();
-          $('.ydc-chevron-parent').removeClass('fa-chevron-right').addClass('fa-chevron-down');
-          icon.removeClass('fa-plus').addClass('fa-minus');
-        } else {
-          $('.ydc-sub-row').hide();
-          $('.ydc-chevron-parent').removeClass('fa-chevron-down').addClass('fa-chevron-right');
-          icon.removeClass('fa-minus').addClass('fa-plus');
-        }
-      };
-
-      window.filterYdcTable = function () {
-        let q = $('#ydcSearchInput').val().toLowerCase().trim();
-        $('#ydcAssemblyGridTable tbody tr').each(function () {
-          let text = $(this).text().toLowerCase();
-          if (text.includes(q)) {
-            $(this).show();
-          } else {
-            $(this).hide();
-          }
-        });
-      };
-
-      window.sortYdcTable = function (colIdx) {
-        let table = $('#ydcAssemblyGridTable');
-        let tbody = table.find('tbody');
-        let asc = table.data('sort-asc-' + colIdx) !== true;
-        table.data('sort-asc-' + colIdx, asc);
-
-        // Update header icons
-        table.find('thead th').each(function (idx) {
-          let icon = $(this).find('i.fa-sort, i.fa-sort-up, i.fa-sort-down');
-          if (idx === colIdx) {
-            icon.removeClass('fa-sort fa-sort-up fa-sort-down opacity-50').addClass(asc ? 'fa-sort-up text-warning' : 'fa-sort-down text-warning');
-          } else {
-            icon.removeClass('fa-sort-up fa-sort-down text-warning').addClass('fa-sort opacity-50');
-          }
-        });
-
-        let parentTrs = tbody.find('tr.ydc-main-row').get();
-        let groups = [];
-
-        parentTrs.forEach(function (parentTr) {
-          let sr = $(parentTr).find('td').eq(0).text().trim();
-          let cleanSr = sr.replace(/[^a-zA-Z0-9]/g, '');
-          let children = tbody.find('tr.ydc-child-of-' + cleanSr).get();
-          groups.push({
-            parent: parentTr,
-            children: children
+      function ensureNumIndex() {
+        if (LIB.numIndex) return;
+        LIB.numIndex = new Map();
+        LIB.items = [];
+        LIB.map.forEach(it => {
+          if (it.deleted || /^Y[SF]/.test(it.code)) return;
+          let i = LIB.items.push(it) - 1;
+          nums(it.desc + ' ' + it.code).forEach(n => {
+            if (!LIB.numIndex.has(n)) LIB.numIndex.set(n, []);
+            LIB.numIndex.get(n).push(i);
           });
         });
-
-        groups.sort(function (a, b) {
-          let keyA = $(a.parent).children('td').eq(colIdx).text().trim();
-          let keyB = $(b.parent).children('td').eq(colIdx).text().trim();
-
-          if (colIdx === 2) { // Dispatch Week column
-            let valA = parseWeekValue(keyA);
-            let valB = parseWeekValue(keyB);
-            return asc ? valA - valB : valB - valA;
-          }
-
-          let numA = parseFloat(keyA.replace(/[^0-9.]/g, ''));
-          let numB = parseFloat(keyB.replace(/[^0-9.]/g, ''));
-          if (!isNaN(numA) && !isNaN(numB)) {
-            return asc ? numA - numB : numB - numA;
-          }
-          return asc ? keyA.localeCompare(keyB) : keyB.localeCompare(keyA);
-        });
-
-        groups.forEach(function (g) {
-          tbody.append(g.parent);
-          g.children.forEach(function (c) {
-            tbody.append(c);
-          });
-        });
-      };
-
-      function getComponentsCount(proj, parentSr) {
-        let prefix = parentSr + '.';
-        let total = 0;
-        (proj.loeData || []).forEach((lr, idx) => {
-          let sr = String(lr.srNo || '').trim();
-          if (sr.startsWith(prefix)) {
-            let a = proj.execution && proj.execution.assemblies.find(x => x.loeIdx === idx);
-            let comps = a ? (a.sap || []) : (lr.subtasks || []);
-            total += comps.length;
-          }
-        });
-        return total;
       }
 
-      function renderAsmGrid(proj) {
-        let loeData = proj.loeData || [];
-        if (!loeData.length) {
-          document.getElementById('ydcAssemblyGrid').innerHTML = '<div class="alert alert-warning"><i class="fa fa-exclamation-triangle me-2"></i>No assemblies found in LOE data.</div>';
-          return;
-        }
-
-        let html = `
-          <div class="table-responsive">
-            <table class="table table-hover table-bordered mb-0 align-middle shadow-sm bg-white assemblies" id="ydcAssemblyGridTable" style="border-radius: 8px; overflow: hidden; width: 100%;">
-              <thead>
-                <tr>
-                  <th style="width: 140px; text-align: center; cursor: pointer;" onclick="sortYdcTable(0)">
-                    <button class="btn btn-sm btn-light border-0 py-0 px-1 me-1 fw-bold" onclick="event.stopPropagation(); toggleAllYdcRows(this)" id="ydcBtnToggleAll" title="Collapse/Expand All" style="font-size: 0.75rem;"><i class="fa fa-plus"></i></button>
-                    SR <i class="fa fa-sort ms-1 opacity-50"></i>
-                  </th>
-                  <th style="cursor: pointer;" onclick="sortYdcTable(1)">ASSEMBLY / SUBASSEMBLY <i class="fa fa-sort ms-1 opacity-50"></i></th>
-                  <th style="width: 170px; text-align: center; cursor: pointer;" onclick="sortYdcTable(2)">DISPATCH WK <i class="fa fa-sort ms-1 opacity-50"></i></th>
-                  <th style="width: 180px; text-align: center; cursor: pointer;" onclick="sortYdcTable(3)">EXECUTION STATUS <i class="fa fa-sort ms-1 opacity-50"></i></th>
-                  <th style="width: 150px; text-align: center; cursor: pointer;" onclick="sortYdcTable(4)">ACTION <i class="fa fa-sort ms-1 opacity-50"></i></th>
-                </tr>
-              </thead>
-              <tbody>`;
-
-        loeData.forEach((lr, idx) => {
-          let a = proj.execution && proj.execution.assemblies.find(x => x.loeIdx === idx);
-          let comps = a ? (a.sap || []) : (lr.subtasks || []);
-          let total = comps.length;
-          let done = a ? comps.filter(c => c.status === 'submitted').length : 0;
-          let pct = total > 0 ? Math.round(done / total * 100) : 0;
-
-          let domBadge = '<span class="badge bg-secondary" style="font-size:0.75rem;">Not Started</span>';
-          if (a) {
-            for (let si = YDC_STAGES.length - 1; si >= 0; si--) {
-              let ss = stageStatus(a, YDC_STAGES[si].key);
-              if (ss !== 'pending') {
-                domBadge = `<span class="badge ${YDC_STAGES[si].badgeCls}" style="font-size:0.75rem;">${YDC_STAGES[si].label === 'SAP' ? 'SAP processing' : YDC_STAGES[si].label}: ${ss === 'complete' ? 'Complete' : 'In Progress'}</span>`;
-                break;
-              }
-            }
-          }
-
-          let sr = String(lr.srNo || (idx + 1)).trim();
-          let isChild = sr.includes('.');
-          let parentPrefix = sr.split('.')[0];
-
-          let srStyle = isChild ? 'color: #6f42c1; font-weight: 500;' : 'color: #d9534f; font-weight: 500;';
-
-          if (isChild) {
-            html += `
-              <tr class="ydc-sub-row child-row ydc-child-of-${parentPrefix.replace(/[^a-zA-Z0-9]/g, '')}" onclick="openYDAstraAssemblyDetailsModal('${proj.id}', ${idx})" style="cursor: pointer; transition: background-color 0.15s; display: none;" title="Click to open details & progress history for ${esc(lr.assemblyName || '')}">
-                <td class="text-center"><span style="${srStyle}">${esc(sr)}</span></td>
-                <td>
-                  <div class="d-flex align-items-center text-secondary fw-normal">
-                    <i class="fa fa-clipboard-check text-primary opacity-75 me-2 ms-4"></i>
-                    <span>${esc(lr.assemblyName || 'Assembly ' + (idx + 1))}</span>
-                    ${lr.drawingNo ? `<code class="small fw-bold text-danger ms-2">${esc(lr.drawingNo)}</code>` : ''}
-                  </div>
-                </td>
-                <td class="text-center">
-                  ${getWeekColorBadge(lr.dispatchWeek)}
-                </td>
-                <td class="text-center">
-                  <div class="mb-1">${domBadge}</div>
-                  <div class="ydc-progress-bar-wrap mx-auto" style="max-width: 120px;"><div class="ydc-progress-bar-fill" style="width:${pct}%"></div></div>
-                  <small class="text-muted" style="font-size: 0.7rem;">${done} / ${total} components (${pct}%)</small>
-                </td>
-                <td class="text-center">
-                  <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="event.stopPropagation(); openYDAstraAssembly('${proj.id}', ${idx})" style="padding: 1px 8px; font-size: 0.75rem;">
-                    Work <i class="fa fa-arrow-right ms-1"></i>
-                  </button>
-                </td>
-              </tr>`;
-          } else {
-            let parentCompsCount = getComponentsCount(proj, sr);
-            html += `
-              <tr class="ydc-main-row parent-row sr-whole-row" onclick="toggleYdcRow('${sr}')" style="cursor: pointer; transition: background-color 0.15s;" title="Click to toggle subassemblies">
-                <td class="text-center"><span style="${srStyle}">${esc(sr)}</span></td>
-                <td>
-                  <div class="d-flex align-items-center text-dark fw-normal">
-                    <span class="toggle-chevron me-2 text-dark"><i class="fa fa-chevron-right ydc-chevron-parent" id="chevron_${sr.replace(/[^a-zA-Z0-9]/g, '')}"></i></span>
-                    <span>${esc(lr.assemblyName || 'Assembly ' + (idx + 1))}</span>
-                    ${lr.drawingNo ? `<code class="small fw-bold text-danger ms-2">${esc(lr.drawingNo)}</code>` : ''}
-                  </div>
-                </td>
-                <td class="text-center">
-                  ${getWeekColorBadge(lr.dispatchWeek)}
-                </td>
-                <td class="text-center">—</td>
-                <td class="text-center text-primary fw-bold small">${parentCompsCount} Components</td>
-              </tr>`;
-          }
+      function libSearch(text) {
+        if (!LIB.count) return null;
+        ensureNumIndex();
+        let qn = nums(text), qw = words(text);
+        if (!qn.length || !qw.length) return null;
+        let score = new Map();
+        qn.forEach(n => (LIB.numIndex.get(n) || []).forEach(i => score.set(i, (score.get(i) || 0) + 1)));
+        let best = null;
+        score.forEach((numHits, i) => {
+          let it = LIB.items[i];
+          let longHit = qn.some(n => n.length >= 4 && nums(it.desc + ' ' + it.code).includes(n));
+          if (numHits < 2 && !longHit) return;
+          let dw = words(it.desc);
+          let wordHits = qw.filter(x => dw.includes(x)).length;
+          if (!wordHits) return;
+          let s = numHits * 2 + wordHits;
+          if (!best || s > best.s) best = { s: s, it: it };
         });
+        return best ? best.it : null;
+      }
 
-        html += `
-              </tbody>
-            </table>
-          </div>`;
-        document.getElementById('ydcAssemblyGrid').innerHTML = html;
+      function parseLibraryWorkbook(wb) {
+        let ws = wb.Sheets[wb.SheetNames[0]];
+        let rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
+        let h = -1, cCode = -1, cDesc = -1, cUom = -1;
+        for (let i = 0; i < Math.min(rows.length, 15) && h < 0; i++) {
+          let r = (rows[i] || []).map(x => String(x || '').toLowerCase().trim());
+          let d = r.findIndex(x => x.includes('description'));
+          let c = r.findIndex(x => x.startsWith('product') && !/description|type|group|category/.test(x));
+          if (d >= 0 && c >= 0) { h = i; cCode = c; cDesc = d; cUom = r.findIndex(x => x.includes('base unit')); }
+        }
+        if (h < 0) throw new Error('Could not find the "Product" and "Product Description" columns.');
+        let out = [];
+        for (let i = h + 1; i < rows.length; i++) {
+          let r = rows[i] || [];
+          let code = clean(r[cCode]);
+          if (code) out.push([code, clean(r[cDesc]), cUom >= 0 ? clean(r[cUom]) : '']);
+        }
+        return out;
+      }
+
+      w.ydcUploadLibrary = function (input) {
+        let file = input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+        Swal.fire({ title: 'Reading SAP library…', text: file.name, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        let reader = new FileReader();
+        reader.onload = async function (e) {
+          try {
+            let wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            let rows = parseLibraryWorkbook(wb);
+            let saved = { fileName: file.name, loadedAt: new Date().toISOString(), rows: rows, extras: [] };
+            await YDStore.saveLibrary(saved);
+            buildLibrary(saved);
+            Swal.fire({ icon: 'success', title: 'SAP library updated', text: rows.length.toLocaleString('en-IN') + ' codes loaded from ' + file.name, timer: 2200, showConfirmButton: false });
+            rerender();
+          } catch (err) {
+            Swal.fire('Could not read the file', err.message || String(err), 'error');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      // Codes the SAP team confirmed as created count as "in SAP" until the
+      // next library upload replaces them with the real export.
+      async function addCreatedToLibrary(codes) {
+        let saved = (await YDStore.loadLibrary()) || { fileName: '', loadedAt: '', rows: [], extras: [] };
+        saved.extras = saved.extras || [];
+        codes.forEach(c => { if (!saved.extras.some(x => x[0] === c.code)) saved.extras.push([c.code, c.desc]); });
+        await YDStore.saveLibrary(saved);
+        buildLibrary(saved);
+      }
+
+      const memKey = (pn, name) => alnum(pn) + '|' + alnum(name);
+
+      async function initLibrary() {
+        if (!w.IDBStorage) return setTimeout(initLibrary, 200); // page storage not set up yet
+        try {
+          buildLibrary(await YDStore.loadLibrary());
+          MEMORY = (await YDStore.loadMemory()) || {};
+        } catch (e) { console.error('SAP library load failed', e); }
+        rerender();
+      }
+
+      function libraryBadgeHtml() {
+        if (!LIB.count) {
+          return `<span class="text-danger fw-semibold small"><i class="fa fa-triangle-exclamation me-1"></i>SAP library not loaded</span>`;
+        }
+        let when = LIB.loadedAt ? new Date(LIB.loadedAt).toLocaleDateString('en-IN') : '';
+        return `<span class="text-muted small" title="${esc(LIB.fileName)}"><i class="fa fa-database me-1"></i>SAP library: ${LIB.count.toLocaleString('en-IN')} codes · ${esc(when)}</span>`;
       }
 
       // ================================================================
-      // VIEW 3: Assembly Detail + Workflow
-      // ================================================================
-      w.openYDAstraAssembly = function (projId, loeIdx) {
-        let proj = getP(projId);
-        if (!proj) return;
-        w._ydcState.projId = projId;
-        w._ydcState.loeIdx = loeIdx;
-        w._ydcState.stage = null;
-
-        hideAllYDC();
-        $('#ydcAssemblyView').fadeIn(200);
-
-        let lr = proj.loeData && proj.loeData[loeIdx];
-        let asmName = lr ? lr.assemblyName : 'Assembly';
-        let drawNo = lr ? (lr.drawingNo || '—') : '—';
-
-        if (document.getElementById('ydcAsmBreadProject')) {
-          document.getElementById('ydcAsmBreadProject').textContent = 'Project ' + (proj.projNo || 'TBD');
-        }
-        document.getElementById('ydcAsmBreadAsm').textContent = asmName;
-        document.getElementById('ydcAsmTitle').innerHTML = '<i class="fa fa-cubes me-2"></i>' + esc(asmName);
-        document.getElementById('ydcAsmMeta').innerHTML =
-          '<strong>Drawing:</strong> ' + esc(drawNo) + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
-          '<strong>Project:</strong> ' + esc(proj.projNo || 'TBD') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
-          '<strong>Client:</strong> ' + esc(proj.client || '');
-
-        renderAssemblyExcelTable(proj, loeIdx);
-      };
-
-      // ================================================================
-      // STANDARD-PART AUTO-MAPPER (components without a drawing number)
-      // ----------------------------------------------------------------
-      // Drawing-based parts get YS codes (YS + drawing no, see below).
-      // Bought-out standard parts (bolts, nuts, washers, gaskets, ...)
-      // must instead use the existing SAP material code, whose format is
-      // family + spec, e.g.  FSBT08M12L40G2 = HEXAGON HEAD BOLT- M12X40MM ,G-10.9
-      // The rules below were reverse-engineered from the SAP item master
-      // dump (July 2026) and reproduce the master's code + description
-      // format exactly, so the PM gets a ready code and the SAP team
-      // only has to confirm. Anything the rules cannot recognise is left
-      // blank for the PM to look up in the item code dump manually.
+      // STANDARD-PART RULES (BOM rows with an IS designation, no drawing)
+      // Code + description in the SAP master's own format; the result is
+      // then looked up in the library, and the library wins.
       // ================================================================
       const YDC_STD = (function () {
         const GRADE_TEXT = { G1: 'G-8.8', G2: 'G-10.9', G3: 'G-12.9', G4: 'SS-304', G5: 'SS-316', G6: 'SS-310' };
-        const DEFAULT_GRADE = 'G2'; // master's most common bolt grade (10.9); flagged as "assumed"
+        const DEFAULT_GRADE = 'G2'; // company standard: 10.9 unless the BOM says otherwise
         // IS 2016 plain washer hole size -> bolt size (M)
         const WASHER_HOLE_TO_M = { '4.3': 4, '4.5': 4, '5.3': 5, '5.5': 5, '6.4': 6, '6.6': 6, '7': 6, '8.4': 8, '9': 8, '10.5': 10, '11': 10, '13': 12, '13.5': 12, '14': 12, '15': 14, '17': 16, '18': 16, '19': 18, '20': 18, '21': 20, '22': 20, '23': 22, '24': 22, '25': 24, '26': 24, '28': 27, '30': 27, '31': 30, '33': 30, '34': 33, '36': 33, '37': 36, '39': 36, '40': 39, '42': 39, '43': 42, '45': 42, '46': 45, '48': 45, '50': 48, '52': 48, '54': 52, '56': 52 };
         // Bearing lock nut KM number for thread size (IS 6731 / DIN 981)
@@ -6508,859 +6182,1066 @@
 
         const pad2 = n => String(n).padStart(2, '0');
         const kmPitch = m => m <= 10 ? '0.75' : m <= 20 ? '1.00' : m <= 50 ? '1.50' : m <= 150 ? '2.00' : '3.00';
+        const stripStd = t => t.replace(/\b(IS|DIN|ISO|EN)\s*-?\s*\d{3,5}(?:\s*\(?PART\s*\d\)?|-\d)?/g, ' ');
 
         function norm(s) {
           return String(s || '').toUpperCase().replace(/[\r\n]+/g, ' ').replace(/[×✕]/g, 'X').replace(/\s+/g, ' ').trim();
         }
-        // Grade / material -> Gx. Returns { code, assumed }
         function parseGrade(t) {
-          if (/\b12\.9\b/.test(t)) return { code: 'G3', assumed: false };
-          if (/\b10\.9\b/.test(t)) return { code: 'G2', assumed: false };
-          if (/\b8\.8\b/.test(t)) return { code: 'G1', assumed: false };
-          if (/SS[\s-]?310/.test(t)) return { code: 'G6', assumed: false };
-          if (/SS[\s-]?316|\bA4\b/.test(t)) return { code: 'G5', assumed: false };
-          if (/SS[\s-]?304|\bA2\b|STAINLESS|\bSS\b/.test(t)) return { code: 'G4', assumed: false };
-          return { code: DEFAULT_GRADE, assumed: true };
+          if (/\b12\.9\b/.test(t)) return 'G3';
+          if (/\b10\.9\b/.test(t)) return 'G2';
+          if (/\b8\.8\b/.test(t)) return 'G1';
+          if (/SS[\s-]?310/.test(t)) return 'G6';
+          if (/SS[\s-]?316|\bA4\b/.test(t)) return 'G5';
+          if (/SS[\s-]?304|\bA2\b|STAINLESS|\bSS\b/.test(t)) return 'G4';
+          return DEFAULT_GRADE;
         }
-        // "M12 x 40", "M12X40", "12 X 40" -> { m, l }
+        const isSS = g => /^G[456]$/.test(g);
         function parseMxL(t) {
-          let m = t.match(/\bM\s*(\d{1,3})\s*X\s*(\d{1,4})\b/) || t.match(/\b(\d{1,3})\s*X\s*(\d{1,4})\s*(?:MM|LG|LONG)?\b/);
+          let m = t.match(/\bM\s*(\d{1,3})\s*X\s*(\d{1,4})\b/) || t.match(/(\d{1,3})\s*X\s*(\d{1,4})\s*(?:MM|LG|LONG)?\b/);
           return m ? { m: parseInt(m[1], 10), l: parseInt(m[2], 10) } : null;
         }
         function parseM(t) {
           let m = t.match(/\bM\s*(\d{1,3})\b/);
           return m ? parseInt(m[1], 10) : null;
         }
-        // Trailing size after the standard number, e.g. "IS 2016 A- 11", "IS 3063- 12-A", "IS 6731 LN - 125-N"
+        // Size after the standard number, e.g. "IS 2016 A- 11", "IS 3063- 12-A"
         function parseTrailingSize(t) {
           let m = t.match(/IS\s*\d{4}(?:\s*\(?PART\s*\d\)?|-\d)?\s*(?:[A-Z]{1,2}\s*)?-\s*(\d{1,3}(?:\.\d)?)\b/);
           if (m) return m[1];
-          // bare size, e.g. "SPRING WASHER 16MM", "WASHER 12" (ignore standard numbers like 2016 / 3063)
-          m = t.replace(/\b(IS|DIN|ISO|EN)\s*-?\s*\d{3,5}(?:[-\s]*\d)?/g, ' ').match(/\b(\d{1,3}(?:\.\d)?)\s*(?:MM)?\b/);
+          m = stripStd(t).match(/\b(\d{1,3}(?:\.\d)?)\s*(?:MM)?\b/);
           return m ? m[1] : null;
         }
-        function gradeSuffix(g, spaced) {
-          return (spaced && (g === 'G1' || g === 'G2' || g === 'G3')) ? ' ' + g : g;
-        }
-        const res = (family, code, desc, assumed, note) => ({ code, desc, family, assumed: !!assumed, note: note || '' });
+        const res = (family, code, desc) => ({ code, desc, family });
 
-        // ---- family recognisers (order matters: nuts/washers before bolts) ----
+        // order matters: nuts / washers before bolts
         const RULES = [
           {
-            label: 'Lock nut (KM)',
             test: t => /IS\s*6731|LOCK\s*NUT|\bKM\s*\d\d\b/.test(t) && !/LOCK\s*WASHER/.test(t),
             map: t => {
               let m = parseM(t) || parseInt(parseTrailingSize(t) || '', 10) || null;
               let km = t.match(/\bKM\s*(\d\d)\b/);
               if (km) { let mm = Object.keys(KM).find(k => KM[k] === km[1]); m = mm ? parseInt(mm, 10) : m; }
               if (!m || !KM[m]) return null;
-              return res('Lock nut', 'FSNT10KM' + KM[m], 'LOCK NUT -M' + m + ' x ' + kmPitch(m) + ' ,KM' + KM[m], false);
+              return res('Lock nut', 'FSNT10KM' + KM[m], 'LOCK NUT -M' + m + ' x ' + kmPitch(m) + ' ,KM' + KM[m]);
             }
           },
           {
-            label: 'Hexagon nut',
+            test: t => /THIN\s*NUT|IS\s*1364[-\s]*(?:PART\s*)?4\b/.test(t),
+            map: t => {
+              let m = parseM(t); if (!m) return null;
+              return res('Thin nut', 'FSNT38M' + pad2(m) + 'G2', 'HEXAGON THIN NUT-M' + pad2(m));
+            }
+          },
+          {
             test: t => /\bNUT\b/.test(t) && !/LOCK\s*NUT|THIN|FLANGE|NYLOC|WING|DOME|CAP\s*NUT|WITH\s*WASHER|U-?BOLT|BOLT\s*&|BOLT,/.test(t),
             map: t => {
               let m = parseM(t); if (!m) return null;
               let g = parseGrade(t);
-              return res('Hexagon nut', 'FSNT07M' + pad2(m) + gradeSuffix(g.code, true), 'HEXAGON NUT- M' + pad2(m) + ' ,' + GRADE_TEXT[g.code], g.assumed);
+              return res('Hexagon nut', 'FSNT07M' + pad2(m) + (isSS(g) ? g : ' ' + g), 'HEXAGON NUT- M' + pad2(m) + ' ,' + GRADE_TEXT[g]);
             }
           },
           {
-            label: 'Plain washer',
-            test: t => /IS\s*2016|PLAIN\s*WASHER|FLAT\s*WASHER|\bWASHER\b(?!.*SPRING)/.test(t) && !/SPRING|LOCK\s*WASHER|TAPER|MACHIN|COPPER|BOLT|NUT/.test(t),
+            test: t => /IS\s*2016|PLAIN\s*WASHER|FLAT\s*WASHER|\bWASHER\b(?!.*SPRING)/.test(t) && !/SPRING|LOCK\s*WASHER|TAPER|MACHIN|COPPER|\bBOLT\b|\bNUT\b/.test(t),
             map: t => {
               let m = parseM(t);
               if (!m) { let s = parseTrailingSize(t); if (s) m = WASHER_HOLE_TO_M[s] || (Number.isInteger(+s) ? +s : null); }
               if (!m) return null;
-              let g = parseGrade(t);
-              let ss = !g.assumed && /^G[456]$/.test(g.code);
-              return res('Plain washer', 'FSWR13M' + pad2(m) + (ss ? g.code : ''), 'PLAIN WASHER -M' + pad2(m) + (ss ? ' ,' + GRADE_TEXT[g.code] : ''), false);
+              let g = parseGrade(t), ss = isSS(g);
+              return res('Plain washer', 'FSWR13M' + pad2(m) + (ss ? g : ''), 'PLAIN WASHER -M' + pad2(m) + (ss ? ' ,' + GRADE_TEXT[g] : ''));
             }
           },
           {
-            label: 'Spring washer',
             test: t => /IS\s*3063|IS\s*6735|SPRING\s*(LOCK\s*)?WASHER/.test(t),
             map: t => {
               let m = parseM(t);
               if (!m) { let s = parseTrailingSize(t); if (s) m = parseInt(s, 10) || null; }
               if (!m) return null;
-              let g = parseGrade(t);
-              let ss = !g.assumed && /^G[456]$/.test(g.code);
-              let note = /IS\s*6735/.test(t) ? 'IS 6735 (heavy duty) mapped to standard spring washer family' : '';
-              return res('Spring washer', 'FSWR16D' + pad2(m) + (ss ? g.code : ''), 'SPRING WASHER-' + pad2(m) + 'MM' + (ss ? ',' + GRADE_TEXT[g.code] : ''), false, note);
+              let g = parseGrade(t), ss = isSS(g);
+              return res('Spring washer', 'FSWR16D' + pad2(m) + (ss ? g : ''), 'SPRING WASHER-' + pad2(m) + 'MM' + (ss ? ',' + GRADE_TEXT[g] : ''));
             }
           },
           {
-            label: 'Allen bolt (SHCS)',
             test: t => /IS\s*2269|SOCKET\s*HEAD\s*CAP|\bSHCS\b|ALLEN\s*(BOLT|SCREW|CAP)/.test(t) && !/COUNTERSUNK|\bCSK\b|GRUB|PLUG/.test(t),
             map: t => {
               let s = parseMxL(t); if (!s) return null;
               let g = parseGrade(t);
-              return res('Allen bolt', 'FSBT01M' + pad2(s.m) + 'L' + pad2(s.l) + g.code, 'ALLEN BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g.code], g.assumed);
+              return res('Allen bolt', 'FSBT01M' + pad2(s.m) + 'L' + pad2(s.l) + g, 'ALLEN BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g]);
             }
           },
           {
-            label: 'CSK bolt',
             test: t => /IS\s*6761|COUNTERSUNK|\bCSK\b|\bC\.S\.K\b/.test(t) && /SCREW|BOLT|CSK/.test(t),
             map: t => {
               let s = parseMxL(t); if (!s) return null;
               let g = parseGrade(t);
-              return res('CSK bolt', 'FSBT03M' + pad2(s.m) + 'L' + pad2(s.l) + g.code, 'CSK BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g.code], g.assumed);
+              return res('CSK bolt', 'FSBT03M' + pad2(s.m) + 'L' + pad2(s.l) + g, 'CSK BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g]);
             }
           },
           {
-            label: 'Grub screw',
             test: t => /GRUB\s*SCREW|SET\s*SCREW|IS\s*6094/.test(t),
             map: t => {
               let s = parseMxL(t); if (!s) return null;
               let g = parseGrade(t);
-              return res('Grub screw', 'FSSW06M' + pad2(s.m) + 'L' + pad2(s.l) + g.code, 'HEX SOCKET GRUB SCREW- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g.code], g.assumed);
+              return res('Grub screw', 'FSSW06M' + pad2(s.m) + 'L' + pad2(s.l) + g, 'HEX SOCKET GRUB SCREW- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g]);
             }
           },
           {
-            label: 'Hexagon head bolt',
-            test: t => /IS\s*1363|HEX(?:AGON)?\.?\s*(HEAD\s*)?(BOLT|SCREW)|\bHHB\b|\bHEX\s*BOLT\b/.test(t) && !/NUT\b.*(?!BOLT)|WITH\s*NUT|,NUT/.test(t.replace(/BOLT/g, '')),
+            test: t => /IS\s*1363|IS\s*1364\s*HHB|HEX(?:AGON)?\.?\s*(HEAD\s*)?(BOLT|SCREW)|\bHHB\b|\bHEX\s*BOLT\b/.test(t) && !/WITH\s*NUT|,\s*NUT|&\s*NUT/.test(t),
             map: t => {
               let s = parseMxL(t); if (!s) return null;
               let g = parseGrade(t);
-              let note = /GRADE\s*C|\b4\.6\b|\b4\.8\b/.test(t) ? 'Design says Grade C (4.6); master has no 4.6 hex bolts' : '';
-              return res('Hexagon head bolt', 'FSBT08M' + pad2(s.m) + 'L' + pad2(s.l) + g.code, 'HEXAGON HEAD BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g.code], g.assumed, note);
+              return res('Hexagon head bolt', 'FSBT08M' + pad2(s.m) + 'L' + pad2(s.l) + g, 'HEXAGON HEAD BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g]);
             }
           },
           {
-            label: 'Dowel pin',
             test: t => /DOWEL\s*PIN/.test(t),
             map: t => {
               let s = parseMxL(t); if (!s) return null;
-              return res('Dowel pin', 'FSPN25M' + pad2(s.m) + 'L' + pad2(s.l), 'DOWEL PIN- M' + pad2(s.m) + 'X' + s.l + 'MM', false);
+              return res('Dowel pin', 'FSPN25M' + pad2(s.m) + 'L' + pad2(s.l), 'DOWEL PIN- M' + pad2(s.m) + 'X' + s.l + 'MM');
             }
           },
           {
-            label: 'Circlip',
+            test: t => /GREASE\s*NIPPLE/.test(t),
+            map: t => {
+              let s = t.match(/(\d(?:\s*-\s*\d)?(?:\s*\/\s*\d+)?)\s*(?:"|INCH|BSP)/); if (!s) return null;
+              let size = s[1].replace(/\s+/g, '').replace(/^(\d)-(\d+)$/, '$1/$2');
+              return res('Grease nipple', 'FSNP05D' + size, 'GREASE NIPPLE ' + size + '" BSP SS304');
+            }
+          },
+          {
             test: t => /CIRCLIP|RETAINING\s*RING/.test(t),
             map: t => {
-              let d = t.match(/(?:DIA|D|Ø| )?\s*-?\s*(\d{1,3})\s*(?:MM)?\b(?!\s*X)/); if (!d) return null;
+              let d = stripStd(t).match(/(?:DIA|Ø)?\s*-?\s*(\d{1,3})\s*(?:MM)?\b(?!\s*X)/); if (!d) return null;
               let internal = /INTERNAL|\bINT\b|BORE/.test(t);
-              return res(internal ? 'Internal circlip' : 'External circlip', 'FSCC' + (internal ? '20' : '19') + 'D' + pad2(d[1]), (internal ? 'INTERNAL CIRCLIP ,DIA-' : 'EXTERNAL CIRCLIP ,DIA-') + pad2(d[1]) + ' MM', false);
+              return res(internal ? 'Internal circlip' : 'External circlip', 'FSCC' + (internal ? '20' : '19') + 'D' + pad2(d[1]), (internal ? 'INTERNAL CIRCLIP ,DIA-' : 'EXTERNAL CIRCLIP ,DIA-') + pad2(d[1]) + ' MM');
             }
           },
           {
-            label: 'Parallel key',
             test: t => /PARALLEL\s*KEY|\bKEY\b.*\d+\s*X\s*\d+\s*X\s*\d+/.test(t),
             map: t => {
               let k = t.match(/(\d{1,3})\s*X\s*(\d{1,3})\s*X\s*(\d{1,4})/); if (!k) return null;
-              return res('Parallel key', 'FSKE12D' + pad2(k[1]) + 'L' + pad2(k[2]) + 'H' + k[3], 'PARALLEL KEY-(' + (+k[1]) + 'X' + (+k[2]) + 'X' + (+k[3]) + ')MM', false);
+              return res('Parallel key', 'FSKE12D' + pad2(k[1]) + 'L' + pad2(k[2]) + 'H' + k[3], 'PARALLEL KEY-(' + (+k[1]) + 'X' + (+k[2]) + 'X' + (+k[3]) + ')MM');
             }
           },
           {
-            label: 'Flange gasket',
             test: t => /GASK[EI]T/.test(t) && /\b(DN|NB)\s*-?\s*\d{2,3}|\d{2,3}\s*(NB|DN)\b/.test(t),
             map: t => {
               let d = t.match(/\b(?:DN|NB)\s*-?\s*(\d{2,3})\b/) || t.match(/\b(\d{2,3})\s*(?:NB|DN)\b/); if (!d) return null;
               let dn = parseInt(d[1], 10);
-              let ansi = /ANSI|B16\.5|CL[\s-]*150|CLASS\s*150/.test(t);
-              if (ansi) return res('Flange gasket (ANSI)', 'GFL' + (GASKET_DN_STYLE[dn] || 'DN') + dn + 'S1', 'GASKET,NEOPRENE,DN' + dn + ',CL-150,ANSI B16.5', false);
+              if (/ANSI|B16\.5|CL[\s-]*150|CLASS\s*150/.test(t)) return res('Flange gasket (ANSI)', 'GFL' + (GASKET_DN_STYLE[dn] || 'DN') + dn + 'S1', 'GASKET,NEOPRENE,DN' + dn + ',CL-150,ANSI B16.5');
               let thk = (t.match(/(\d(?:\.\d)?)\s*(?:MM)?\s*THK/) || [])[1] || '3';
-              let assumed = !/EN[\s-]*1092|PN\s*6/.test(t);
-              return res('Flange gasket (EN-1092 PN6)', 'GPFL' + (GASKET_DN_STYLE[dn] || 'DN') + dn + 'S2', 'GASKET,PN6 FLANGE,DN' + dn + ',' + thk + 'THK,EN-1092', assumed, assumed ? 'Flange standard not stated; EN-1092 PN6 assumed' : '');
+              return res('Flange gasket (EN-1092 PN6)', 'GPFL' + (GASKET_DN_STYLE[dn] || 'DN') + dn + 'S2', 'GASKET,PN6 FLANGE,DN' + dn + ',' + thk + 'THK,EN-1092');
             }
           }
         ];
 
-        // Is this a project drawing number (-> YS code) rather than a standard designation?
         function isStandardDesignation(t) {
           return /^(IS|DIN|ISO|EN|ANSI|ASME|JIS|BS)\s*[-\s]?\d/.test(t) || /GASK[EI]T/.test(t);
         }
+        // Project drawing number, e.g. 2630-TRL-01-01-00-001
         function isProjectDrawingNo(dwg) {
-          let t = norm(dwg).replace(/[\s-]/g, '');
-          return /^[A-Z]{0,2}\d{4}[A-Z]{1,5}\d{2,}$/.test(t) || /^\d{4}[A-Z]{1,5}[A-Z0-9]*\d{3,}$/.test(t);
+          let t = norm(dwg);
+          if (!t || isStandardDesignation(t)) return false;
+          t = t.replace(/[^A-Z0-9]/g, '');
+          return /^[A-Z]{0,2}\d{4}[A-Z]{1,5}\d{2,}$/.test(t);
         }
-
-        // Main entry. Returns { code, desc, family, source: 'drawing'|'std'|'none', assumed, note }
-        function map(drawingNo, component) {
-          let dwg = norm(drawingNo), comp = norm(component);
-          let text = (dwg + ' ' + comp).trim();
-          if (dwg && !isStandardDesignation(dwg) && isProjectDrawingNo(dwg)) return { source: 'drawing' };
+        function map(partNo, component) {
+          let text = (norm(partNo) + ' ' + norm(component)).trim();
           for (let r of RULES) {
             if (!r.test(text)) continue;
             let out = r.map(text);
-            if (out) { out.source = 'std'; return out; }
+            if (out) return out;
           }
-          return { source: 'none', code: '', desc: '', family: '', assumed: false, note: '' };
+          return null;
         }
-        return { map, isProjectDrawingNo, isStandardDesignation, RULES, DEFAULT_GRADE };
+        return { map, isProjectDrawingNo, DEFAULT_GRADE };
       })();
+      w.YDC_STD = YDC_STD;
 
-      // Drawing-based YS code: YS + drawing number without dashes.
-      function getYSCodeFromDrawing(drawingNo) {
-        if (!drawingNo) return '';
-        return 'YS' + String(drawingNo).replace(/-/g, '').trim();
-      }
+      // ================================================================
+      // ASSEMBLY IDENTIFIERS — YF code, YF description, WBS element
+      // 2630-CAR-01-03-00-000  ->  YF2630CAR010300000 / WBS 2630CAR0103
+      // ================================================================
+      const DWG_RE = /(\d{4})-([A-Z]{2,5})-(\d{2})-(\d{2})-(\d{2})-(\d{3})/;
 
-      function getYSDescriptionFromDrawing(component, drawingNo) {
-        let comp = String(component || '').trim();
-        let normalizedDwg = String(drawingNo || '').replace(/-/g, '').trim();
-        let prefix = normalizedDwg.substring(0, 7);
-        if (prefix) {
-          return comp + ' (' + prefix + ')';
-        }
-        return comp;
-      }
-
-      // One decision for a BOM row: drawing part -> YS code; standard part
-      // -> SAP family code from YDC_STD; otherwise blank (PM looks it up).
-      // A drawing-number field that holds a standard designation such as
-      // "IS 1363(Part2) - M12 x 40" is treated as a standard part, never
-      // turned into a YS code.
-      function ydcResolveCode(drawingNo, component) {
-        let m = YDC_STD.map(drawingNo, component);
-        if (m.source === 'std') return m;
-        let dwg = String(drawingNo || '').trim();
-        if (dwg && !YDC_STD.isStandardDesignation(dwg.toUpperCase())) {
-          return { source: 'drawing', code: getYSCodeFromDrawing(dwg), desc: getYSDescriptionFromDrawing(component, dwg), family: '', assumed: false, note: '' };
-        }
-        return { source: 'none', code: '', desc: String(component || '').trim(), family: '', assumed: false, note: '' };
-      }
-      w.ydcResolveCode = ydcResolveCode;
-
-      function getYSCode(drawingNo, component) {
-        return ydcResolveCode(drawingNo, component).code;
-      }
-
-      function getYSDescription(component, drawingNo) {
-        return ydcResolveCode(drawingNo, component).desc;
-      }
-
-      // Small badge shown under the YSCODE cell explaining where the code came from.
-      function ydcCodeHint(st) {
-        let m = ydcResolveCode(st.drawingNo, st.component);
-        if (m.source === 'std') {
-          let cls = m.assumed ? 'bg-warning text-dark' : 'bg-success';
-          let tip = 'Standard part: ' + m.family + (m.assumed ? ' — grade / standard assumed, SAP team to confirm' : '') + (m.note ? '. ' + m.note : '');
-          return '<div class="mt-1"><span class="badge ' + cls + '" style="font-size:0.62rem;" title="' + esc(tip) + '"><i class="fa fa-wand-magic-sparkles me-1"></i>STD · ' + esc(m.family) + (m.assumed ? ' · assumed' : '') + '</span></div>';
-        }
-        if (m.source === 'none' && !st.ysCode) {
-          return '<div class="mt-1"><span class="badge bg-danger" style="font-size:0.62rem;" title="No drawing number and no matching standard-part rule. Search the SAP item code dump and paste the code."><i class="fa fa-magnifying-glass me-1"></i>Search item code dump</span></div>';
-        }
-        return '';
-      }
-
-      window.ydcDynamicCols = window.ydcDynamicCols || [];
-
-      window.addYDCColumn = function () {
-        Swal.fire({
-          title: 'Add New Column',
-          input: 'text',
-          inputPlaceholder: 'Enter column name...',
-          showCancelButton: true,
-          confirmButtonText: 'Add'
-        }).then((result) => {
-          let colName = result.value;
-          if (!colName) return;
-          let colKey = 'custom_' + colName.toLowerCase().replace(/[^a-z0-9]/g, '');
-          window.ydcDynamicCols.push({ key: colKey, label: colName });
-
-          let proj = getP(w._ydcState.projId);
-          let loeIdx = w._ydcState.loeIdx;
-          renderAssemblyExcelTable(proj, loeIdx);
+      function assemblyDrawingNo(lr) {
+        let own = String(lr.drawingNo || '').toUpperCase().match(DWG_RE);
+        if (own) return own[0];
+        // fall back to the parts' own numbers: most common first four groups
+        let count = {};
+        (lr.subtasks || []).forEach(st => {
+          let m = String(st.drawingNo || '').toUpperCase().match(DWG_RE);
+          if (m) { let k = m.slice(1, 5).join('-'); count[k] = (count[k] || 0) + 1; }
         });
-      };
+        let best = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+        return best ? best + '-00-000' : '';
+      }
 
-      window.saveYDCExcelTableSilent = async function () {
-        let subtasks = [];
-        $('#ydcExcelTable tbody tr.ydc-excel-row').each(function () {
-          let ysCode = $(this).find('.ydc-val-yscode').val();
-          let ysDesc = $(this).find('.ydc-val-ysdesc').val();
-          if (ysCode) ysCode = ysCode.trim();
-          if (ysDesc) ysDesc = ysDesc.trim();
+      function autoIds(proj, lr) {
+        let dwg = assemblyDrawingNo(lr);
+        if (!dwg) return { yfCode: '', yfDesc: '', wbs: '' };
+        let parts = dwg.split('-');
+        let yfCode = 'YF' + parts.join('');
+        let hit = libGet(yfCode);
+        let projNo = parts[0];
+        let yfDesc = hit && !hit.deleted ? hit.desc : fitDesc(projNo + '-' + clean(lr.assemblyName).toUpperCase(), '');
+        return { yfCode: yfCode, yfDesc: yfDesc, wbs: parts.slice(0, 4).join('') };
+      }
 
-          let dwg = $(this).find('.ydc-text-dwg').text().trim();
-          let comp = $(this).find('.ydc-text-comp').text().trim();
-          let qty = $(this).find('.ydc-text-qty').text().trim();
-          let wt = $(this).find('.ydc-text-wt').text().trim();
+      function ids(proj, lr) {
+        let a = autoIds(proj, lr), pr = lr.procurement || {};
+        return { yfCode: pr.yfCode || a.yfCode, yfDesc: pr.yfDesc || a.yfDesc, wbs: pr.wbs || a.wbs };
+      }
 
-          let customFields = {};
-          $(this).find('.ydc-val-custom').each(function () {
-            let field = $(this).data('field');
-            customFields[field] = $(this).val().trim();
-          });
+      // "NAME (2630TRL)", never longer than SAP's 40 characters
+      function fitDesc(name, tag) {
+        let suffix = tag ? ' (' + tag + ')' : '';
+        let room = MAX_DESC - suffix.length;
+        let n = clean(name).toUpperCase();
+        if (n.length > room) {
+          n = n.slice(0, room);
+          let cut = n.lastIndexOf(' ');
+          if (cut > room * 0.6) n = n.slice(0, cut);
+          n = n.replace(/[\s,.-]+$/, '');
+        }
+        return n + suffix;
+      }
 
-          if (ysCode || ysDesc || comp || dwg || qty || wt) {
-            subtasks.push({
-              ysCode: ysCode,
-              ysDescription: ysDesc,
-              component: comp,
-              drawingNo: dwg,
-              qty: qty,
-              weight: wt,
-              ...customFields
-            });
+      // ================================================================
+      // ROW RESOLUTION — one code + description + confidence per BOM row
+      //   green  : code is in the SAP library and the names agree
+      //   yellow : new code (SAP team to create) or a match worth a look
+      //   red    : no usable code yet — PM must type it
+      // ================================================================
+      function bomRows(lr) {
+        let seen = {};
+        return (lr.subtasks || []).map((st, i) => {
+          let pn = clean(st.drawingNo), name = clean(st.component);
+          let base = alnum(pn) || ('C:' + alnum(name)) || ('ROW' + i);
+          seen[base] = (seen[base] || 0) + 1;
+          return {
+            i: i, key: seen[base] > 1 ? base + '#' + seen[base] : base,
+            partNo: pn, name: name, qty: clean(st.qty), material: clean(st.material), weight: clean(st.weight)
+          };
+        });
+      }
+
+      function bomSig(rows) { return rows.map(r => r.key + ':' + r.qty).join('|'); }
+
+      function autoCode(r) {
+        let learned = MEMORY[memKey(r.partNo, r.name)];
+        if (learned) return { code: learned.code, desc: learned.desc, source: 'learned' };
+        if (YDC_STD.isProjectDrawingNo(r.partNo)) {
+          let code = 'YS' + alnum(r.partNo).replace(/^YS/, '');
+          let hit = libGet(code);
+          if (hit && !hit.deleted) return { code: code, desc: hit.desc, source: 'drawing' };
+          return { code: code, desc: fitDesc(r.name, alnum(r.partNo).replace(/^YS/, '').slice(0, 7)), source: 'drawing' };
+        }
+        let std = YDC_STD.map(r.partNo, r.name);
+        if (std) {
+          let hit = libFind(std.code);
+          return hit ? { code: hit.code, desc: hit.desc, source: 'std' } : { code: std.code, desc: std.desc, source: 'std' };
+        }
+        let found = libSearch(r.partNo + ' ' + r.name);
+        if (found) return { code: found.code, desc: found.desc, source: 'search' };
+        return { code: '', desc: fitDesc(r.name, ''), source: 'none' };
+      }
+
+      // Share of the BOM name's words found in the SAP name (CYL ~ CYLINDER)
+      function nameAgreement(bomName, sapDesc) {
+        let a = words(bomName), b = words(String(sapDesc).replace(/\([^)]*\)\s*$/, ''));
+        if (!a.length) return 1;
+        let hit = a.filter(x => b.some(y => x === y || (Math.min(x.length, y.length) >= 3 && (x.startsWith(y) || y.startsWith(x))))).length;
+        return hit / a.length;
+      }
+
+      function requestedElsewhere(proj, code, loeIdx) {
+        let out = null;
+        (proj.loeData || []).forEach((lr, idx) => {
+          if (idx === loeIdx || out) return;
+          let pr = lr.procurement;
+          if (!pr || pr.status === 'draft') return;
+          let c = (pr.newCodes || []).find(x => x.code === code);
+          if (c) out = { sr: lr.srNo, created: !!c.created };
+        });
+        return out;
+      }
+
+      function resolveRows(proj, loeIdx) {
+        let lr = proj.loeData[loeIdx];
+        let pr = lr.procurement || { rows: {} };
+        let rows = bomRows(lr);
+        rows.forEach(r => {
+          let ov = (pr.rows && pr.rows[r.key]) || {};
+          let auto = autoCode(r);
+          r.auto = auto;
+          r.code = ov.ysCode != null ? ov.ysCode : auto.code;
+          let hit = libGet(r.code);
+          r.desc = ov.ysDesc != null ? ov.ysDesc : ((ov.ysCode != null && hit) ? hit.desc : auto.desc);
+          r.override = ov.ysCode != null || ov.ysDesc != null;
+          r.inLib = !!(hit && !hit.deleted);
+          r.order = ov;
+
+          if (!r.code) { r.level = 'red'; r.why = 'No code could be made — type the SAP code'; }
+          else if (r.code.length > MAX_CODE) { r.level = 'red'; r.why = 'Code longer than ' + MAX_CODE + ' characters'; }
+          else if (!r.desc || r.desc.length > MAX_DESC) { r.level = 'red'; r.why = 'Description must be 1–' + MAX_DESC + ' characters'; }
+          else if (hit && hit.deleted) { r.level = 'red'; r.why = 'This code is marked Deleted in SAP'; }
+          else if (r.inLib) {
+            if (auto.source === 'search' && !r.override) { r.level = 'yellow'; r.why = 'Closest item in SAP library — please check'; }
+            else if (nameAgreement(r.name, hit.desc) < 0.6 && auto.source === 'drawing' && !r.override) { r.level = 'yellow'; r.why = 'SAP name differs from BOM name (' + r.name + ')'; }
+            else { r.level = 'green'; r.why = hit.created ? 'Created by SAP team' : 'In SAP library'; }
+          } else {
+            let other = requestedElsewhere(proj, r.code, loeIdx);
+            r.level = 'yellow';
+            r.isNew = true;
+            r.why = !LIB.count ? 'SAP library not loaded — cannot check'
+              : other ? 'New code — already requested with SR ' + other.sr
+                : 'New code — SAP team to create';
+            if (other) r.requestedWith = other;
           }
         });
+        // same code with two different descriptions inside one BOM
+        let byCode = {};
+        rows.forEach(r => { if (r.code) (byCode[r.code] = byCode[r.code] || []).push(r); });
+        Object.values(byCode).forEach(list => {
+          if (new Set(list.map(r => r.desc)).size > 1) list.forEach(r => { r.level = 'red'; r.why = 'Same code used with different descriptions in this BOM'; });
+        });
+        return rows;
+      }
 
-        let proj = getP(w._ydcState.projId);
-        let loeIdx = w._ydcState.loeIdx;
-        if (proj && proj.loeData && proj.loeData[loeIdx]) {
-          proj.loeData[loeIdx].subtasks = subtasks;
-          let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
-          if (saveFn) await saveFn();
+      // New codes this assembly must request (YS rows + the YF code)
+      function collectNewCodes(proj, lr, rows) {
+        let list = [], seen = new Set();
+        let id = ids(proj, lr);
+        if (id.yfCode && LIB.count && !libGet(id.yfCode)) { list.push({ kind: 'YF', code: id.yfCode, desc: id.yfDesc, rowKey: '', created: false }); seen.add(id.yfCode); }
+        rows.forEach(r => {
+          if (!r.isNew || r.requestedWith || seen.has(r.code)) return;
+          seen.add(r.code);
+          list.push({ kind: r.code.startsWith('YS') ? 'YS' : 'STD', code: r.code, desc: r.desc, rowKey: r.key, created: false });
+        });
+        return list;
+      }
+
+      // ================================================================
+      // PROCUREMENT RECORD — create / migrate
+      // ================================================================
+      function ensureProc(proj, lr) {
+        if (lr.procurement) {
+          lr.procurement.rows = lr.procurement.rows || {};
+          lr.procurement.newCodes = lr.procurement.newCodes || [];
+          return lr.procurement;
         }
-      };
+        let pr = { yfCode: '', yfDesc: '', wbs: '', status: 'draft', rows: {}, newCodes: [] };
+        // carry over data entered with the earlier prototype
+        bomRows(lr).forEach(r => {
+          let st = lr.subtasks[r.i] || {}, o = {};
+          ['po1', 'po2', 'vendor1', 'vendor2', 'price1', 'price2', 'date1', 'date2', 'ready1', 'ready2'].forEach(k => { if (st[k]) o[k] = st[k]; });
+          let auto = autoCode(r);
+          if (st.ysCode && st.ysCode !== auto.code) o.ysCode = st.ysCode;
+          if (st.ysDescription && st.ysDescription !== auto.desc) o.ysDesc = st.ysDescription;
+          if (Object.keys(o).length) pr.rows[r.key] = o;
+        });
+        if (lr.sapReviewCompleted) pr.status = 'bomSubmitted';
+        else if (lr.sapSent) pr.status = 'codesSent';
+        lr.procurement = pr;
+        return pr;
+      }
 
-      window.sendToSAPTeam = async function () {
-        let proj = getP(w._ydcState.projId);
-        let loeIdx = w._ydcState.loeIdx;
-        let lr = proj && proj.loeData && proj.loeData[loeIdx];
-        if (lr) {
-          await window.saveYDCExcelTableSilent();
+      function procStatus(lr) {
+        if (!hasBom(lr)) return 'noBom';
+        return (lr.procurement && lr.procurement.status) || 'draft';
+      }
 
-          lr.sapSent = true;
+      function defaultStage(lr) {
+        let s = procStatus(lr);
+        return s === 'bomSubmitted' ? 'ordering' : s === 'codesSent' ? 'sapCheck' : 'sap';
+      }
 
-          let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
-          if (saveFn) await saveFn();
+      // ================================================================
+      // VIEW 1: project → assemblies list
+      // ================================================================
+      w.showYDAstraView = function (projId) {
+        $('#dashboardView').hide();
+        $('#drawingsView').hide();
+        $('.main').addClass('drawings-mode');
+        $('#navYdAscend').show();
+        hideAllYDC();
 
-          if (!proj.ydcHistory) proj.ydcHistory = [];
-          proj.ydcHistory.push({
-            loeIdx: loeIdx,
-            timestamp: new Date().toISOString(),
-            user: "Admin",
-            action: "BOM sent to SAP Team (Yashveer & Shivam), CC to sender. Stage 2 SAP Check unlocked."
-          });
-          if (saveFn) await saveFn();
+        let eligs = pData().filter(isEligible);
+        $('#ydcProjectSelector').html(eligs.map(p => `<option value="${p.id}">${esc(p.projNo || 'TBD')} - ${esc(p.client || 'N/A')}</option>`).join(''));
 
-          let a = proj.execution && proj.execution.assemblies.find(x => x.loeIdx === loeIdx);
-          if (a) {
-            (a.sap || []).forEach(item => item.status = 'submitted');
-          }
-          if (saveFn) await saveFn();
-
-          Swal.fire({
-            icon: 'success',
-            title: 'Dispatched to SAP Team',
-            html: `
-              <div class="text-center">
-                <p class="mb-2 fw-bold text-dark">BOM has been successfully sent!</p>
-                <div class="p-3 bg-light border rounded text-start small mb-2">
-                  <div class="text-primary fw-bold mb-1"><i class="fa fa-paper-plane me-1"></i> Sent to:</div>
-                  <div class="ms-3 text-dark fw-semibold">SAP Team (Yashveer & Shivam)</div>
-                  <div class="text-secondary fw-bold mt-2 mb-1"><i class="fa fa-envelope me-1"></i> CC:</div>
-                  <div class="ms-3 text-dark fw-semibold">Sender</div>
-                </div>
-                <div class="text-success small fw-bold"><i class="fa fa-unlock me-1"></i> Stage 2: Review of YS Codes & YS Description is now active.</div>
-              </div>
-            `,
-            confirmButtonText: 'Proceed to SAP Check'
-          });
-
-          window.ydcActiveSubStage = 'sapCheck';
-          renderAssemblyExcelTable(proj, loeIdx);
-        }
-      };
-
-      window.approveSAPCheck = async function () {
-        let proj = getP(w._ydcState.projId);
-        let loeIdx = w._ydcState.loeIdx;
-        let lr = proj && proj.loeData && proj.loeData[loeIdx];
-        if (lr) {
-          lr.sapReviewCompleted = true;
-          lr.sapReviewDate = new Date().toISOString();
-
-          let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
-          if (saveFn) await saveFn();
-
-          if (!proj.ydcHistory) proj.ydcHistory = [];
-          proj.ydcHistory.push({
-            loeIdx: loeIdx,
-            timestamp: new Date().toISOString(),
-            user: "Admin",
-            action: "SAP Check & YS Codes Review completed. Stage 3 Fabrication/Machining unlocked."
-          });
-          if (saveFn) await saveFn();
-
-          let a = proj.execution && proj.execution.assemblies.find(x => x.loeIdx === loeIdx);
-          if (a) {
-            if (!a.fabrication || a.fabrication.length === 0) {
-              a.fabrication = (lr.subtasks || []).map((st, i) => ({
-                componentId: 'comp_' + loeIdx + '_' + i,
-                component: st.component || '',
-                qty: st.qty || '',
-                material: st.material || '',
-                status: 'pending'
-              }));
-            }
-          }
-          if (saveFn) await saveFn();
-
-          Swal.fire({
-            icon: 'success',
-            title: 'SAP Check Approved',
-            html: `
-              <div class="text-center">
-                <p class="mb-2 fw-bold text-dark">YS Codes & YS Descriptions verified!</p>
-                <div class="text-success small fw-bold"><i class="fa fa-unlock me-1"></i> Stage 3: Fabrication / Machining is now unlocked.</div>
-              </div>
-            `,
-            timer: 2500,
-            showConfirmButton: false
-          });
-
-          window.ydcActiveSubStage = 'fabrication';
-          renderAssemblyExcelTable(proj, loeIdx);
-        }
-      };
-
-      window.switchYdcAssemblyStage = function (stage) {
-        let proj = getP(w._ydcState.projId);
-        let loeIdx = w._ydcState.loeIdx;
-        let lr = proj && proj.loeData && proj.loeData[loeIdx];
-        if (stage === 'sapCheck' && (!lr || !lr.sapSent)) {
-          Swal.fire({
-            icon: 'warning',
-            title: 'Stage Locked',
-            text: 'Please send the BOM to the SAP Team (Stage 1) first to unlock Stage 2: SAP Check.'
-          });
-          return;
-        }
-        if (stage === 'fabrication' && (!lr || !lr.sapReviewCompleted)) {
-          Swal.fire({
-            icon: 'warning',
-            title: 'Stage Locked',
-            text: 'Please complete Stage 2: SAP Check (Review of YS Codes & Descriptions) first to unlock Stage 3: Fabrication/Machining.'
-          });
-          return;
-        }
-        window.ydcActiveSubStage = stage;
-        renderAssemblyExcelTable(proj, loeIdx);
-      };
-
-      function renderAssemblyExcelTable(proj, loeIdx) {
-        let lr = proj.loeData && proj.loeData[loeIdx];
-        let subtasks = lr ? (lr.subtasks || []) : [];
-        let sapSent = lr && lr.sapSent;
-        let sapReviewCompleted = lr && lr.sapReviewCompleted;
-
-        if (!window.ydcActiveSubStage) {
-          if (sapReviewCompleted) window.ydcActiveSubStage = 'fabrication';
-          else if (sapSent) window.ydcActiveSubStage = 'sapCheck';
-          else window.ydcActiveSubStage = 'sap';
-        }
-
-        let step1Active = window.ydcActiveSubStage === 'sap' ? 'btn-primary' : 'btn-outline-secondary';
-        let step2Active = window.ydcActiveSubStage === 'sapCheck' ? 'btn-primary' : 'btn-outline-secondary';
-        let step3Active = window.ydcActiveSubStage === 'fabrication' ? 'btn-primary' : 'btn-outline-secondary';
-
-        let step2Disabled = sapSent ? '' : 'disabled';
-        let step2Icon = sapSent ? '' : '<i class="fa fa-lock ms-1 text-muted" style="font-size:0.75rem;"></i>';
-
-        let step3Disabled = sapReviewCompleted ? '' : 'disabled';
-        let step3Icon = sapReviewCompleted ? '' : '<i class="fa fa-lock ms-1 text-muted" style="font-size:0.75rem;"></i>';
-
-        let statusBadgeText = '';
-        let statusBadgeClass = '';
-        if (sapReviewCompleted) {
-          statusBadgeText = '<i class="fa fa-check-double me-1"></i> Stage 2 SAP Check Completed (YS Codes Verified)';
-          statusBadgeClass = 'bg-success';
-        } else if (sapSent) {
-          statusBadgeText = '<i class="fa fa-paper-plane me-1"></i> Sent to SAP Team (Yashveer & Shivam) - CC to Sender';
-          statusBadgeClass = 'bg-info text-white';
+        let target = projId && getP(projId) && isEligible(getP(projId)) ? projId : (eligs[0] && eligs[0].id);
+        if (target) {
+          $('#ydcProjectSelector').val(target);
+          w.openYDAstraProject(target);
         } else {
-          statusBadgeText = '<i class="fa fa-clock me-1"></i> Stage 1: Awaiting BOM Send to SAP';
-          statusBadgeClass = 'bg-warning text-dark';
+          $('#ydcProjectSummary').fadeIn(200);
+          $('#ydcProjMeta').html('<span class="text-danger">No project has a BOM uploaded yet. Assemblies appear here as soon as Design uploads a BOM on the Drawings page.</span>');
+          $('#ydcLibraryStatus').html(libraryBadgeHtml());
+          $('#ydcAssemblyGrid').html('');
         }
+      };
+
+      w.openYDAstraProject = function (projId) {
+        let proj = getP(projId);
+        if (!proj) return;
+        w._ydcState.projId = projId;
+        w._ydcState.loeIdx = null;
+
+        hideAllYDC();
+        $('#ydcProjectSummary').fadeIn(200);
+        $('#ydcProjMeta').html(
+          '<strong>Project Number:</strong> ' + esc(proj.projNo || 'TBD') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
+          '<strong>Client:</strong> ' + esc(proj.client || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
+          '<strong>Site:</strong> ' + esc(proj.site || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
+          '<strong>Machine:</strong> ' + esc(proj.machine || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
+          '<strong>Project Manager (PM):</strong> ' + esc(proj.pm || 'TBD'));
+        $('#ydcLibraryStatus').html(libraryBadgeHtml());
+        renderAsmGrid(proj);
+      };
+
+      w.ydcBackToProjects = function () {
+        if (w._ydcState.projId != null) w.openYDAstraProject(w._ydcState.projId);
+        else w.showYDAstraView();
+      };
+
+      function statusCell(proj, idx) {
+        let lr = proj.loeData[idx];
+        let s = procStatus(lr);
+        if (s === 'noBom') return '<span class="badge bg-light text-muted border" style="font-size:0.72rem;">Awaiting BOM</span>';
+        let rows = resolveRows(proj, idx);
+        if (s === 'draft') {
+          let c = { green: 0, yellow: 0, red: 0 };
+          rows.forEach(r => c[r.level]++);
+          return `<span class="ydc-count"><i class="ydc-dot g"></i>${c.green}<i class="ydc-dot y ms-2"></i>${c.yellow}<i class="ydc-dot r ms-2"></i>${c.red}</span>
+                  <span class="text-muted ms-2" style="font-size:0.72rem;">Stage 1</span>`;
+        }
+        if (s === 'codesSent') {
+          let nc = lr.procurement.newCodes || [];
+          return `<span class="badge bg-info text-dark" style="font-size:0.72rem;">With SAP team · ${nc.filter(c => c.created).length}/${nc.length} created</span>`;
+        }
+        let withPo = rows.filter(r => r.order.po1 || r.order.po2).length;
+        return `<span class="badge bg-success" style="font-size:0.72rem;">Ordering · ${withPo}/${rows.length} with PO / Jobwork</span>`;
+      }
+
+      function renderAsmGrid(proj) {
+        let loeData = proj.loeData || [];
+        if (!loeData.length) {
+          $('#ydcAssemblyGrid').html('<div class="alert alert-warning"><i class="fa fa-exclamation-triangle me-2"></i>No assemblies found in LOE data.</div>');
+          return;
+        }
+        let html = `
+          <div class="table-responsive">
+            <table class="table table-hover table-bordered mb-0 align-middle shadow-sm bg-white assemblies" id="ydcAssemblyGridTable" style="border-radius: 8px; overflow: hidden; width: 100%;">
+              <thead>
+                <tr>
+                  <th style="width: 140px; text-align: center;" onclick="sortYdcTable(0)">
+                    <button class="btn btn-sm btn-light border-0 py-0 px-1 me-1 fw-bold" onclick="event.stopPropagation(); toggleAllYdcRows(this)" title="Collapse/Expand All" style="font-size: 0.75rem;"><i class="fa fa-plus"></i></button>
+                    SR <i class="fa fa-sort ms-1 opacity-50"></i>
+                  </th>
+                  <th onclick="sortYdcTable(1)">ASSEMBLY / SUBASSEMBLY <i class="fa fa-sort ms-1 opacity-50"></i></th>
+                  <th style="width: 150px; text-align: center;" onclick="sortYdcTable(2)">DISPATCH WK <i class="fa fa-sort ms-1 opacity-50"></i></th>
+                  <th style="width: 260px; text-align: center;" onclick="sortYdcTable(3)">PROCUREMENT STATUS <i class="fa fa-sort ms-1 opacity-50"></i></th>
+                  <th style="width: 120px; text-align: center;">ACTION</th>
+                </tr>
+              </thead>
+              <tbody>`;
+
+        loeData.forEach((lr, idx) => {
+          let sr = String(lr.srNo || (idx + 1)).trim();
+          let isChild = sr.includes('.');
+          let parentKey = sr.split('.')[0].replace(/[^a-zA-Z0-9]/g, '');
+          let srStyle = isChild ? 'color: #6f42c1; font-weight: 500;' : 'color: #d9534f; font-weight: 500;';
+          let name = esc(lr.assemblyName || 'Assembly ' + (idx + 1));
+          let dwg = lr.drawingNo ? `<code class="small fw-bold text-danger ms-2">${esc(lr.drawingNo)}</code>` : '';
+          let work = hasBom(lr)
+            ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="event.stopPropagation(); openYDAstraAssembly('${proj.id}', ${idx})" style="padding: 1px 8px; font-size: 0.75rem;">Work <i class="fa fa-arrow-right ms-1"></i></button>`
+            : '<span class="text-muted">—</span>';
+
+          if (isChild) {
+            html += `
+              <tr class="ydc-sub-row child-row ydc-child-of-${parentKey}" onclick="openYDAstraAssemblyDetailsModal('${proj.id}', ${idx})" style="cursor: pointer; display: none;" title="Click for progress history">
+                <td class="text-center"><span style="${srStyle}">${esc(sr)}</span></td>
+                <td><div class="d-flex align-items-center text-secondary fw-normal"><i class="fa fa-clipboard-check text-primary opacity-75 me-2 ms-4"></i><span>${name}</span>${dwg}</div></td>
+                <td class="text-center">${getWeekColorBadge(lr.dispatchWeek)}</td>
+                <td class="text-center">${statusCell(proj, idx)}</td>
+                <td class="text-center">${work}</td>
+              </tr>`;
+          } else {
+            let childBoms = loeData.filter(x => String(x.srNo || '').trim().startsWith(sr + '.') && hasBom(x)).length;
+            html += `
+              <tr class="ydc-main-row parent-row sr-whole-row" onclick="toggleYdcRow('${esc(sr)}')" style="cursor: pointer;" title="Click to toggle subassemblies">
+                <td class="text-center"><span style="${srStyle}">${esc(sr)}</span></td>
+                <td><div class="d-flex align-items-center text-dark fw-normal"><span class="toggle-chevron me-2 text-dark"><i class="fa fa-chevron-right ydc-chevron-parent" id="chevron_${parentKey}"></i></span><span>${name}</span>${dwg}</div></td>
+                <td class="text-center">${getWeekColorBadge(lr.dispatchWeek)}</td>
+                <td class="text-center">${hasBom(lr) ? statusCell(proj, idx) : (childBoms ? `<span class="text-muted small">${childBoms} BOM${childBoms > 1 ? 's' : ''} below</span>` : '—')}</td>
+                <td class="text-center">${hasBom(lr) ? work : ''}</td>
+              </tr>`;
+          }
+        });
+
+        html += `</tbody></table></div>`;
+        $('#ydcAssemblyGrid').html(html);
+      }
+
+      w.toggleYdcRow = function (parentSr) {
+        let key = String(parentSr).trim().replace(/[^a-zA-Z0-9]/g, '');
+        let rows = $('.ydc-child-of-' + key);
+        let open = rows.is(':visible');
+        rows.toggle(!open);
+        $('#chevron_' + key).toggleClass('fa-chevron-down', !open).toggleClass('fa-chevron-right', open);
+      };
+
+      w.toggleAllYdcRows = function (btn) {
+        let icon = $(btn).find('i');
+        let expand = icon.hasClass('fa-plus');
+        $('.ydc-sub-row').toggle(expand);
+        $('.ydc-chevron-parent').toggleClass('fa-chevron-down', expand).toggleClass('fa-chevron-right', !expand);
+        icon.toggleClass('fa-plus', !expand).toggleClass('fa-minus', expand);
+      };
+
+      w.filterYdcTable = function () {
+        let q = $('#ydcSearchInput').val().toLowerCase().trim();
+        let rows = $('#ydcAssemblyGridTable tbody tr');
+        if (!q) {
+          rows.filter('.ydc-main-row').show();
+          rows.filter('.ydc-sub-row').hide();
+          $('.ydc-chevron-parent').removeClass('fa-chevron-down').addClass('fa-chevron-right');
+          return;
+        }
+        rows.each(function () { $(this).toggle($(this).text().toLowerCase().includes(q)); });
+      };
+
+      w.sortYdcTable = function (colIdx) {
+        let table = $('#ydcAssemblyGridTable'), tbody = table.find('tbody');
+        let asc = table.data('sort-asc-' + colIdx) !== true;
+        table.data('sort-asc-' + colIdx, asc);
+        table.find('thead th').each(function (idx) {
+          $(this).find('i.fa-sort, i.fa-sort-up, i.fa-sort-down')
+            .removeClass('fa-sort fa-sort-up fa-sort-down text-warning opacity-50')
+            .addClass(idx === colIdx ? (asc ? 'fa-sort-up text-warning' : 'fa-sort-down text-warning') : 'fa-sort opacity-50');
+        });
+        let groups = tbody.find('tr.ydc-main-row').get().map(p => {
+          let key = $(p).find('td').eq(0).text().trim().replace(/[^a-zA-Z0-9]/g, '');
+          return { parent: p, children: tbody.find('tr.ydc-child-of-' + key).get() };
+        });
+        groups.sort((a, b) => {
+          let ka = $(a.parent).children('td').eq(colIdx).text().trim(), kb = $(b.parent).children('td').eq(colIdx).text().trim();
+          if (colIdx === 2) return asc ? parseWeekValue(ka) - parseWeekValue(kb) : parseWeekValue(kb) - parseWeekValue(ka);
+          let na = parseFloat(ka.replace(/[^0-9.]/g, '')), nb = parseFloat(kb.replace(/[^0-9.]/g, ''));
+          if (!isNaN(na) && !isNaN(nb)) return asc ? na - nb : nb - na;
+          return asc ? ka.localeCompare(kb) : kb.localeCompare(ka);
+        });
+        groups.forEach(g => { tbody.append(g.parent); g.children.forEach(c => tbody.append(c)); });
+      };
+
+      // ---- Progress & history modal ----
+      w.openYDAstraAssemblyDetailsModal = function (projId, loeIdx) {
+        let proj = getP(projId);
+        let lr = proj && proj.loeData && proj.loeData[loeIdx];
+        if (!lr) return;
+        $('#ydcAsmDetName').text(lr.assemblyName || 'Assembly');
+        let id = hasBom(lr) ? ids(proj, lr) : {};
+        $('#ydcAsmDetMeta').html(`
+          <strong>Drawing No:</strong> ${esc(lr.drawingNo || '—')} &nbsp;|&nbsp;
+          <strong>WBS:</strong> ${esc(id.wbs || '—')} &nbsp;|&nbsp;
+          <strong>YF Code:</strong> ${esc(id.yfCode || '—')} &nbsp;|&nbsp;
+          <strong>Dispatch Week:</strong> ${esc(lr.dispatchWeek || '—')}`);
+
+        let s = procStatus(lr);
+        let reached = { noBom: -1, draft: 0, codesSent: 1, bomSubmitted: 2 }[s];
+        $('#ydcAssemblyStepper').html(STAGES.map((st, i) => {
+          let cls = i < reached ? 'completed' : i === reached ? 'active' : '';
+          let icon = i < reached ? '<i class="fa fa-check"></i>' : i === reached ? '<i class="fa fa-circle-dot"></i>' : '<i class="fa fa-circle-notch opacity-25"></i>';
+          return `<div class="stepper-item ${cls}"><div class="step-counter">${icon}</div><div class="step-name">${st.label}</div></div>`;
+        }).join(''));
+
+        let history = (proj.ydcHistory || []).filter(h => h.loeIdx === loeIdx).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        $('#ydcAssemblyHistoryList').html(history.length ? history.map(h => `
+          <li class="list-group-item d-flex justify-content-between align-items-start py-2">
+            <div class="ms-2 me-auto"><div class="fw-bold">${esc(h.action)}</div><span class="text-muted small">By ${esc(h.user || 'System')}</span></div>
+            <span class="badge bg-light text-dark border">${new Date(h.timestamp).toLocaleString()}</span>
+          </li>`).join('') : '<li class="list-group-item text-muted text-center py-3">No history events logged yet.</li>');
+        $('#ydcAssemblyDetailsModal').modal('show');
+      };
+
+      // ================================================================
+      // VIEW 2: assembly workspace (3 stages)
+      // ================================================================
+      w.openYDAstraAssembly = function (projId, loeIdx) {
+        let proj = getP(projId);
+        let lr = proj && proj.loeData && proj.loeData[loeIdx];
+        if (!lr) return;
+        ensureProc(proj, lr);
+        w._ydcState.projId = projId;
+        w._ydcState.loeIdx = loeIdx;
+        w._ydcState.stage = defaultStage(lr);
+
+        hideAllYDC();
+        $('#ydcAssemblyView').fadeIn(200);
+        $('#ydcAsmBreadProject').text('Project ' + (proj.projNo || 'TBD'));
+        $('#ydcAsmBreadAsm').text(lr.assemblyName || 'Assembly');
+        $('#ydcAsmTitle').html('<i class="fa fa-cubes me-2"></i>' + esc(lr.assemblyName || 'Assembly'));
+        $('#ydcAsmMeta').html(
+          '<strong>Drawing:</strong> ' + esc(lr.drawingNo || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
+          '<strong>SR:</strong> ' + esc(lr.srNo || '—') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
+          '<strong>Project:</strong> ' + esc(proj.projNo || 'TBD') + '&nbsp;&nbsp;|&nbsp;&nbsp;' +
+          '<strong>Client:</strong> ' + esc(proj.client || ''));
+        renderAssembly();
+      };
+
+      function current() {
+        let proj = getP(w._ydcState.projId);
+        let lr = proj && proj.loeData && proj.loeData[w._ydcState.loeIdx];
+        return lr ? { proj: proj, lr: lr, loeIdx: w._ydcState.loeIdx, pr: ensureProc(proj, lr) } : null;
+      }
+
+      function rerender() {
+        if ($('#ydcAssemblyView').is(':visible') && current()) renderAssembly();
+        else if ($('#ydcProjectSummary').is(':visible') && getP(w._ydcState.projId)) w.openYDAstraProject(w._ydcState.projId);
+      }
+
+      w.switchYdcAssemblyStage = function (stage) {
+        let c = current(); if (!c) return;
+        let s = c.pr.status;
+        if (stage === 'sapCheck' && s === 'draft') return Swal.fire('Stage locked', 'Send the new codes to the SAP team (Stage 1) first.', 'warning');
+        if (stage === 'ordering' && s !== 'bomSubmitted') return Swal.fire('Stage locked', 'Submit the BOM to SAP first (after the SAP team has created any new codes).', 'warning');
+        w._ydcState.stage = stage;
+        renderAssembly();
+      };
+
+      function renderAssembly() {
+        let c = current(); if (!c) return;
+        let { proj, lr, pr } = c;
+        let s = pr.status, stage = w._ydcState.stage;
+        let rows = resolveRows(proj, c.loeIdx);
+
+        let reached = { draft: 0, codesSent: 1, bomSubmitted: 2 }[s];
+        let stepBtns = STAGES.map((st, i) => {
+          let locked = i > reached;
+          return `<button class="btn btn-sm ${stage === st.key ? 'btn-primary' : 'btn-outline-secondary'} fw-bold ${locked ? 'disabled' : ''}" onclick="switchYdcAssemblyStage('${st.key}')">
+                    <span class="badge bg-white text-primary me-1">${i + 1}</span> ${st.label}${locked ? ' <i class="fa fa-lock ms-1 text-muted" style="font-size:0.75rem;"></i>' : (i < reached ? ' <i class="fa fa-check ms-1" style="font-size:0.75rem;"></i>' : '')}
+                  </button>`;
+        }).join('<div style="width: 15px; height: 2px; background: #cbd5e1;"></div>');
+
+        let statusText = s === 'draft' ? ['bg-warning text-dark', '<i class="fa fa-clock me-1"></i> Stage 1: PM to check codes']
+          : s === 'codesSent' ? ['bg-info text-dark', '<i class="fa fa-paper-plane me-1"></i> New codes with ' + SAP_TEAM]
+            : ['bg-success', '<i class="fa fa-check-double me-1"></i> BOM submitted to SAP' + (pr.submittedAt ? ' · ' + new Date(pr.submittedAt).toLocaleDateString('en-IN') : '')];
 
         let html = `
-          <div class="d-flex justify-content-between align-items-center mb-4 p-2 bg-light rounded border">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <button class="btn btn-sm ${step1Active} fw-bold" onclick="switchYdcAssemblyStage('sap')">
-                <span class="badge bg-white text-primary me-1">1</span> BOM to SAP
-              </button>
-              <div style="width: 15px; height: 2px; background: #cbd5e1;"></div>
-              <button class="btn btn-sm ${step2Active} fw-bold ${step2Disabled}" onclick="switchYdcAssemblyStage('sapCheck')">
-                <span class="badge bg-white text-primary me-1">2</span> SAP Check (YS Review) ${step2Icon}
-              </button>
-              <div style="width: 15px; height: 2px; background: #cbd5e1;"></div>
-              <button class="btn btn-sm ${step3Active} fw-bold ${step3Disabled}" onclick="switchYdcAssemblyStage('fabrication')">
-                <span class="badge bg-white text-primary me-1">3</span> Fabrication / Machining ${step3Icon}
-              </button>
-            </div>
-            <div>
-              <span class="badge ${statusBadgeClass} px-3 py-2 fw-semibold" style="font-size:0.8rem;">
-                ${statusBadgeText}
-              </span>
-            </div>
-          </div>
-        `;
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded border flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">${stepBtns}</div>
+            <span class="badge ${statusText[0]} px-3 py-2 fw-semibold" style="font-size:0.8rem;">${statusText[1]}</span>
+          </div>`;
 
-        window.uploadYDCExcelBOM = function (input) {
-          let files = input.files;
-          if (!files || files.length === 0) return;
-          let file = files[0];
-
-          let proj = getP(w._ydcState.projId);
-          let loeIdx = w._ydcState.loeIdx;
-          let lr = proj && proj.loeData && proj.loeData[loeIdx];
-          if (!lr) {
-            input.value = '';
-            return;
-          }
-
-          const reader = new FileReader();
-          reader.onload = async function (e) {
-            try {
-              const data = new Uint8Array(e.target.result);
-              const workbook = XLSX.read(data, { type: 'array' });
-              const firstSheet = workbook.SheetNames[0];
-              const worksheet = workbook.Sheets[firstSheet];
-              const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-              let subtasks = [];
-              let wtColIdx = 7;
-              let h4Val = (sheetData[3] && sheetData[3][7] !== undefined) ? String(sheetData[3][7]).trim() : '';
-              if (!h4Val) {
-                wtColIdx = 6;
-              }
-
-              for (let i = 2; i < sheetData.length; i++) {
-                const row = sheetData[i];
-                if (!row || row.length === 0) continue;
-
-                const comp = row[3] !== undefined ? String(row[3]).trim() : '';
-                const dwg = row[1] !== undefined ? String(row[1]).trim() : '';
-                const qty = row[4] !== undefined ? String(row[4]).trim() : '';
-                const mat = row[5] !== undefined ? String(row[5]).trim() : '';
-                const wt = row[wtColIdx] !== undefined ? String(row[wtColIdx]).trim() : '';
-
-                if (comp || dwg || qty || mat || wt) {
-                  subtasks.push({
-                    component: comp,
-                    drawingNo: dwg,
-                    qty: qty,
-                    material: mat,
-                    weight: wt
-                  });
-                }
-              }
-
-              lr.subtasks = subtasks;
-              if (subtasks.length > 0 && !lr.drawingNo) {
-                let firstDwg = subtasks.find(s => s.drawingNo)?.drawingNo;
-                if (firstDwg) {
-                  lr.drawingNo = firstDwg;
-                }
-              }
-
-              if (proj.execution && proj.execution.assemblies) {
-                proj.execution.assemblies = proj.execution.assemblies.filter(x => x.loeIdx !== loeIdx);
-              }
-
-              let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
-              if (saveFn) await saveFn();
-
-              Swal.fire({
-                icon: 'success',
-                title: 'Excel Imported',
-                text: `Successfully imported ${subtasks.length} component(s) into BOM.`,
-                timer: 2000,
-                showConfirmButton: false
-              });
-
-              renderAssemblyExcelTable(proj, loeIdx);
-            } catch (err) {
-              Swal.fire('Error Parsing Excel', err.message || err, 'error');
-            }
-            input.value = '';
-          };
-          reader.readAsArrayBuffer(file);
-        };
-
-        if (window.ydcActiveSubStage === 'sap') {
-          let dynamicHeaders = '';
-          window.ydcDynamicCols.forEach(c => {
-            dynamicHeaders += `<th>${esc(c.label)}</th>`;
-          });
-
-          html += `
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-              <h5 class="mb-0 text-secondary"><i class="fa fa-table me-2"></i>Stage 1: BOM to SAP</h5>
-              <div class="d-flex gap-2 align-items-center flex-wrap">
-                ${!sapSent ? `
-                <button class="btn btn-primary btn-sm fw-bold" onclick="saveYDCExcelTable()" title="Save Changes">
-                  <i class="fa fa-save me-1"></i>Save
-                </button>
-                <button class="btn btn-outline-success btn-sm fw-bold" onclick="addYDCExcelRow()" title="Add Row">
-                  <i class="fa fa-plus me-1"></i>Add Row
-                </button>
-                <button class="btn btn-outline-success btn-sm fw-bold" onclick="addYDCColumn()" title="Add Column">
-                  <i class="fa fa-columns me-1"></i>Add Column
-                </button>
-                <button class="btn btn-outline-primary btn-sm fw-bold" onclick="document.getElementById('ydcExcelFileInput').click()" title="Upload Excel BOM">
-                  <i class="fa fa-upload me-1"></i>Upload Excel
-                </button>
-                <input type="file" id="ydcExcelFileInput" style="display: none;" accept=".xlsx, .xls, .csv" onchange="uploadYDCExcelBOM(this)">
-                ` : ''}
-                <button class="btn btn-outline-primary btn-sm fw-bold" onclick="copyYDCExcelTable()" title="Copy Table Data">
-                  <i class="fa fa-copy me-1"></i>Copy
-                </button>
-                <button class="btn btn-outline-success btn-sm fw-bold" onclick="exportYDCExcelTable()" title="Export to Excel">
-                  <i class="fa fa-file-excel me-1"></i>Export
-                </button>
-                ${!sapSent ? `
-                <button class="btn btn-info btn-sm fw-bold text-white shadow-sm" onclick="sendToSAPTeam()" title="Send to SAP Team">
-                  <i class="fa fa-paper-plane me-1"></i>Send
-                </button>
-                ` : ''}
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table class="table table-sm table-bordered table-hover bg-white text-nowrap shadow-sm assemblies" id="ydcExcelTable" style="font-size: 0.85rem;">
-                <thead>
-                  <tr>
-                    <th style="width: 40px;" class="text-center">#</th>
-                    <th>YSCODE</th>
-                    <th>YSDESCRIPTION</th>
-                    <th>DRAWING NUMBER</th>
-                    <th>COMPONENT NAME</th>
-                    <th style="width: 80px;" class="text-center">QUANTITY</th>
-                    <th style="width: 100px;" class="text-center">WEIGHT</th>
-                    ${dynamicHeaders}
-                    ${!sapSent ? `<th style="width: 40px;" class="text-center"><i class="fa fa-trash"></i></th>` : ''}
-                  </tr>
-                </thead>
-                <tbody>`;
-
-          let totalColsSpan = 7 + window.ydcDynamicCols.length + (!sapSent ? 1 : 0);
-
-          if (subtasks.length === 0) {
-            html += `<tr class="empty-row"><td colspan="${totalColsSpan}" class="text-center py-4 text-muted"><i class="fa fa-folder-open me-2 opacity-50"></i>No components found.</td></tr>`;
-          } else {
-            subtasks.forEach((st, i) => {
-              let ysCode = st.ysCode || getYSCode(st.drawingNo, st.component);
-              let ysDesc = st.ysDescription || getYSDescription(st.component, st.drawingNo);
-
-              let dynamicCells = '';
-              window.ydcDynamicCols.forEach(c => {
-                let val = st[c.key] || '';
-                dynamicCells += `
-                  <td class="align-middle">
-                    <input type="text" class="form-control form-control-sm border-0 ydc-val-custom ydc-paste-target" data-field="${c.key}" value="${esc(val)}" ${sapSent ? 'disabled' : ''}>
-                  </td>`;
-              });
-
-              html += `
-                <tr class="ydc-excel-row">
-                  <td class="text-center align-middle text-muted fw-bold row-num">${i + 1}</td>
-                  <td class="align-middle">
-                    <input type="text" class="form-control form-control-sm border-0 ydc-val-yscode ydc-paste-target fw-semibold text-primary" value="${esc(ysCode)}" ${sapSent ? 'disabled' : ''}>
-                    ${ydcCodeHint(st)}
-                  </td>
-                  <td class="align-middle">
-                    <input type="text" class="form-control form-control-sm border-0 ydc-val-ysdesc ydc-paste-target fw-semibold text-dark" value="${esc(ysDesc)}" ${sapSent ? 'disabled' : ''}>
-                  </td>
-                  <td class="align-middle ydc-text-dwg">${esc(st.drawingNo || '')}</td>
-                  <td class="align-middle ydc-text-comp">${esc(st.component || '')}</td>
-                  <td class="text-center align-middle ydc-text-qty">${esc(st.qty || '')}</td>
-                  <td class="text-center align-middle ydc-text-wt">${esc(st.weight || '')}</td>
-                  ${dynamicCells}
-                  ${!sapSent ? `
-                  <td class="text-center align-middle">
-                    <button class="btn btn-sm btn-outline-danger border-0 bg-transparent text-danger" onclick="deleteYDCExcelRow(this)"><i class="fa fa-times"></i></button>
-                  </td>` : ''}
-                </tr>`;
-            });
-          }
-
-          html += `
-                </tbody>
-              </table>
-            </div>`;
-
-        } else if (window.ydcActiveSubStage === 'sapCheck') {
-          html += `
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-              <div>
-                <h5 class="mb-0 text-secondary"><i class="fa fa-user-check me-2"></i>Stage 2: Review of YS Codes & YS Description</h5>
-                <small class="text-muted">SAP Team (Yashveer & Shivam): Review and edit YS Codes & Descriptions below, then save or approve.</small>
-              </div>
-              <div class="d-flex gap-2 align-items-center flex-wrap">
-                ${!sapReviewCompleted ? `
-                <button class="btn btn-primary btn-sm fw-bold" onclick="saveYDCExcelTable()" title="Save Changes">
-                  <i class="fa fa-save me-1"></i>Save
-                </button>
-                ` : ''}
-                <button class="btn btn-outline-primary btn-sm fw-bold" onclick="copyYDCExcelTable()" title="Copy Table Data">
-                  <i class="fa fa-copy me-1"></i>Copy
-                </button>
-                <button class="btn btn-outline-success btn-sm fw-bold" onclick="exportYDCExcelTable()" title="Export to Excel">
-                  <i class="fa fa-file-excel me-1"></i>Export
-                </button>
-                ${!sapReviewCompleted ? `
-                <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="approveSAPCheck()">
-                  <i class="fa fa-check-circle me-1"></i>Approve & Unlock Stage 3 (Fabrication)
-                </button>
-                ` : `
-                <span class="badge bg-success px-3 py-2 fs-6"><i class="fa fa-check-circle me-1"></i>YS Codes Approved</span>
-                `}
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table class="table table-sm table-bordered table-hover bg-white text-nowrap shadow-sm assemblies" id="ydcExcelTable" style="font-size: 0.85rem;">
-                <thead>
-                  <tr>
-                    <th style="width: 40px;" class="text-center">#</th>
-                    <th>YSCODE</th>
-                    <th>YSDESCRIPTION</th>
-                    <th>DRAWING NUMBER</th>
-                    <th>COMPONENT NAME</th>
-                    <th style="width: 80px;" class="text-center">QUANTITY</th>
-                    <th style="width: 100px;" class="text-center">WEIGHT</th>
-                    <th style="width: 140px;" class="text-center">REVIEW STATUS</th>
-                  </tr>
-                </thead>
-                <tbody>`;
-
-          if (subtasks.length === 0) {
-            html += `<tr class="empty-row"><td colspan="8" class="text-center py-4 text-muted"><i class="fa fa-folder-open me-2 opacity-50"></i>No components found.</td></tr>`;
-          } else {
-            subtasks.forEach((st, i) => {
-              let ysCode = st.ysCode || getYSCode(st.drawingNo, st.component);
-              let ysDesc = st.ysDescription || getYSDescription(st.component, st.drawingNo);
-
-              html += `
-                <tr class="ydc-excel-row">
-                  <td class="text-center align-middle text-muted fw-bold row-num">${i + 1}</td>
-                  <td class="align-middle">
-                    <input type="text" class="form-control form-control-sm border-0 ydc-val-yscode ydc-paste-target fw-semibold text-primary" value="${esc(ysCode)}" ${sapReviewCompleted ? 'disabled' : ''}>
-                    ${ydcCodeHint(st)}
-                  </td>
-                  <td class="align-middle">
-                    <input type="text" class="form-control form-control-sm border-0 ydc-val-ysdesc ydc-paste-target fw-semibold text-dark" value="${esc(ysDesc)}" ${sapReviewCompleted ? 'disabled' : ''}>
-                  </td>
-                  <td class="align-middle ydc-text-dwg">${esc(st.drawingNo || '')}</td>
-                  <td class="align-middle ydc-text-comp">${esc(st.component || '')}</td>
-                  <td class="text-center align-middle ydc-text-qty">${esc(st.qty || '')}</td>
-                  <td class="text-center align-middle ydc-text-wt">${esc(st.weight || '')}</td>
-                  <td class="text-center align-middle">
-                    <span class="badge ${sapReviewCompleted ? 'bg-success' : 'bg-info text-dark'} px-2 py-1">
-                      ${sapReviewCompleted ? '<i class="fa fa-check me-1"></i>Verified' : '<i class="fa fa-edit me-1"></i>Editable for Review'}
-                    </span>
-                  </td>
-                </tr>`;
-            });
-          }
-
-          html += `
-                </tbody>
-              </table>
-            </div>`;
-
-        } else {
-          html += `
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <h5 class="mb-0 text-secondary"><i class="fa fa-industry me-2"></i>Stage 3: Fabrication / Machining</h5>
-              <div class="d-flex gap-2">
-                <button class="btn btn-primary btn-sm fw-bold" onclick="saveYDCExcelTable()" title="Save Changes">
-                  <i class="fa fa-save"></i>
-                </button>
-                <button class="btn btn-outline-primary btn-sm fw-bold" onclick="copyYDCExcelTable()" title="Copy Table Data">
-                  <i class="fa fa-copy"></i>
-                </button>
-                <button class="btn btn-outline-success btn-sm fw-bold" onclick="exportYDCExcelTable()" title="Export to Excel">
-                  <i class="fa fa-file-excel"></i>
-                </button>
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table class="table table-sm table-bordered table-hover bg-white text-nowrap shadow-sm align-middle assemblies" id="ydcExcelTable" style="font-size: 0.85rem;">
-                <thead class="text-center">
-                  <tr>
-                    <th style="width: 40px;">#</th>
-                    <th>YSCODE</th>
-                    <th>YSDESCRIPTION</th>
-                    <th>QTY</th>
-                    <th>MATERIAL</th>
-                    <th>WEIGHT</th>
-                    <th>PO Number / Jobwork ID</th>
-                    <th>Vendor / Operator</th>
-                    <th>Price</th>
-                    <th>Date of PO / Jobwork Creation</th>
-                    <th>Tentative Ready Date</th>
-                  </tr>
-                </thead>
-                <tbody>`;
-
-          if (subtasks.length === 0) {
-            html += `<tr class="empty-row"><td colspan="11" class="text-center py-4 text-muted"><i class="fa fa-folder-open me-2 opacity-50"></i>No components found.</td></tr>`;
-          } else {
-            subtasks.forEach((st, i) => {
-              let ysCode = st.ysCode || getYSCode(st.drawingNo, st.component);
-              let ysDesc = st.ysDescription || getYSDescription(st.component, st.drawingNo);
-              let material = st.material || '—';
-
-              html += `
-                <tr class="ydc-excel-row">
-                  <td class="text-center text-muted fw-bold">${i + 1}</td>
-                  <td class="fw-semibold text-primary ydc-text-yscode">${esc(ysCode)}</td>
-                  <td class="fw-semibold text-dark ydc-text-ysdesc" style="white-space: normal; max-width: 200px;">${esc(ysDesc)}</td>
-                  <td class="text-center ydc-text-qty">${esc(st.qty || '')}</td>
-                  <td class="ydc-text-material">${esc(material)}</td>
-                  <td class="text-center ydc-text-wt">${esc(st.weight || '')}</td>
-                  
-                  <td>
-                    <div class="d-flex flex-column gap-1" style="min-width: 140px;">
-                      <input type="text" class="form-control form-control-sm py-0 px-1 border ydc-val-po1" style="font-size: 0.72rem; height: 20px;" placeholder="1: PO No" value="${esc(st.po1 || '')}">
-                      <input type="text" class="form-control form-control-sm py-0 px-1 border ydc-val-po2" style="font-size: 0.72rem; height: 20px;" placeholder="2: Jobwork ID" value="${esc(st.po2 || '')}">
-                    </div>
-                  </td>
-                  
-                  <td>
-                    <div class="d-flex flex-column gap-1" style="min-width: 140px;">
-                      <input type="text" class="form-control form-control-sm py-0 px-1 border ydc-val-vendor1" style="font-size: 0.72rem; height: 20px;" placeholder="1: Vendor" value="${esc(st.vendor1 || '')}">
-                      <input type="text" class="form-control form-control-sm py-0 px-1 border ydc-val-vendor2" style="font-size: 0.72rem; height: 20px;" placeholder="2: Operator" value="${esc(st.vendor2 || '')}">
-                    </div>
-                  </td>
-                  
-                  <td>
-                    <div class="d-flex flex-column gap-1" style="min-width: 90px;">
-                      <input type="number" class="form-control form-control-sm py-0 px-1 border ydc-val-price1" style="font-size: 0.72rem; height: 20px;" placeholder="1: Price" value="${esc(st.price1 || '')}">
-                      <input type="number" class="form-control form-control-sm py-0 px-1 border ydc-val-price2" style="font-size: 0.72rem; height: 20px;" placeholder="2: Price" value="${esc(st.price2 || '')}">
-                    </div>
-                  </td>
-                  
-                  <td>
-                    <div class="d-flex flex-column gap-1" style="min-width: 120px;">
-                      <input type="date" class="form-control form-control-sm py-0 px-1 border ydc-val-date1" style="font-size: 0.72rem; height: 20px;" value="${esc(st.date1 || '')}">
-                      <input type="date" class="form-control form-control-sm py-0 px-1 border ydc-val-date2" style="font-size: 0.72rem; height: 20px;" value="${esc(st.date2 || '')}">
-                    </div>
-                  </td>
-                  
-                  <td>
-                    <div class="d-flex flex-column gap-1" style="min-width: 120px;">
-                      <input type="date" class="form-control form-control-sm py-0 px-1 border ydc-val-ready1" style="font-size: 0.72rem; height: 20px;" value="${esc(st.ready1 || '')}">
-                      <input type="date" class="form-control form-control-sm py-0 px-1 border ydc-val-ready2" style="font-size: 0.72rem; height: 20px;" value="${esc(st.ready2 || '')}">
-                    </div>
-                  </td>
-                </tr>`;
-            });
-          }
-
-          html += `
-                </tbody>
-              </table>
-            </div>`;
+        if (s !== 'draft' && pr.sentSig && pr.sentSig !== bomSig(rows)) {
+          html += `<div class="alert alert-warning py-2 d-flex justify-content-between align-items-center">
+                     <span><i class="fa fa-code-branch me-2"></i>Design has revised this BOM since it was sent. Re-open Stage 1 to check the changed rows.</span>
+                     <button class="btn btn-sm btn-warning fw-bold" onclick="ydcReopen()">Re-open Stage 1</button>
+                   </div>`;
         }
 
-        document.getElementById('ydcAssemblyComponentsExcelView').innerHTML = html;
+        html += idStrip(proj, lr, s === 'draft');
+        if (stage === 'sap') html += stage1Html(c, rows);
+        else if (stage === 'sapCheck') html += stage2Html(c, rows);
+        else html += stage3Html(c, rows);
+
+        let scroll = $('#ydcExcelTable').parent().scrollLeft();
+        $('#ydcAssemblyComponentsExcelView').html(html);
+        $('#ydcExcelTable').parent().scrollLeft(scroll || 0);
         initYDCColumnResizers();
       }
 
+      // ---- YF code / YF description / WBS element strip ----
+      function idStrip(proj, lr, editable) {
+        let id = ids(proj, lr);
+        let yfHit = libGet(id.yfCode);
+        let yfLevel = !id.yfCode ? 'red' : yfHit && !yfHit.deleted ? 'green' : 'yellow';
+        let yfWhy = !id.yfCode ? 'No assembly drawing number found' : yfHit ? 'In SAP library' : 'New YF code — SAP team to create';
+        let dis = editable ? '' : 'disabled';
+        return `
+          <div class="ydc-idstrip mb-3">
+            <div class="ydc-idbox ydc-c-${yfLevel}" title="${esc(yfWhy)}">
+              <label>YF CODE</label>
+              <input class="form-control form-control-sm fw-semibold text-primary" maxlength="${MAX_CODE}" value="${esc(id.yfCode)}" ${dis} onchange="ydcSetId('yfCode', this.value)">
+            </div>
+            <div class="ydc-idbox flex-grow-1">
+              <label>YF DESCRIPTION</label>
+              <input class="form-control form-control-sm" maxlength="${MAX_DESC}" value="${esc(id.yfDesc)}" ${dis} onchange="ydcSetId('yfDesc', this.value)">
+            </div>
+            <div class="ydc-idbox">
+              <label>WBS ELEMENT</label>
+              <input class="form-control form-control-sm fw-semibold" value="${esc(id.wbs)}" ${dis} onchange="ydcSetId('wbs', this.value)">
+            </div>
+            <div class="ms-auto align-self-end text-end">${libraryBadgeHtml()}
+              <div><label class="btn btn-link btn-sm p-0 small">Update SAP library<input type="file" accept=".xlsx,.xls" hidden onchange="ydcUploadLibrary(this)"></label></div>
+            </div>
+          </div>`;
+      }
+
+      w.ydcSetId = async function (field, value) {
+        let c = current(); if (!c) return;
+        let v = clean(value);
+        if (field !== 'yfDesc') v = v.toUpperCase();
+        c.pr[field] = v === autoIds(c.proj, c.lr)[field] ? '' : v;
+        await YDStore.saveProjects();
+        renderAssembly();
+      };
+
+      const legend = `<div class="ydc-legend"><span><i class="ydc-dot g"></i>In SAP library</span><span><i class="ydc-dot y"></i>New code / please check</span><span><i class="ydc-dot r"></i>No code yet — please fill</span></div>`;
+
+      // ---- Stage 1: BOM to SAP ----
+      function stage1Html(c, rows) {
+        let draft = c.pr.status === 'draft';
+        let id = ids(c.proj, c.lr);
+        let dis = draft ? '' : 'disabled';
+
+        let html = `
+          <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h5 class="mb-0 text-secondary"><i class="fa fa-table me-2"></i>Stage 1: BOM to SAP</h5>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              ${draft ? `<button class="btn btn-primary btn-sm fw-bold" onclick="ydcSave()"><i class="fa fa-save me-1"></i>Save</button>` : ''}
+              <button class="btn btn-outline-primary btn-sm fw-bold" onclick="copyYDCExcelTable()"><i class="fa fa-copy me-1"></i>Copy</button>
+              <button class="btn btn-outline-success btn-sm fw-bold" onclick="exportYDCExcelTable()"><i class="fa fa-file-excel me-1"></i>Export</button>
+              <span id="ydcSendSlot">${sendButton(c, rows)}</span>
+            </div>
+          </div>
+          ${legend}
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered bg-white text-nowrap shadow-sm assemblies ydc-codes" id="ydcExcelTable" style="font-size: 0.85rem;">
+              <thead><tr>
+                <th style="width: 40px;" class="text-center">#</th>
+                <th>YF CODE</th><th>WBS ELEMENT</th>
+                <th style="min-width: 235px;">YSCODE</th><th style="min-width: 330px;">YSDESCRIPTION</th>
+                <th>PART / DRAWING NO.</th><th>COMPONENT NAME</th>
+                <th class="text-center">QTY</th><th>MATERIAL</th><th class="text-center">WEIGHT</th>
+              </tr></thead><tbody>`;
+        if (!rows.length) html += `<tr><td colspan="10" class="text-center py-4 text-muted">No components in this BOM.</td></tr>`;
+        rows.forEach((r, n) => {
+          html += `
+            <tr class="ydc-excel-row ydc-c-${r.level}" title="${esc(r.why)}">
+              <td class="text-center text-muted fw-bold">${n + 1}</td>
+              <td class="text-muted">${esc(id.yfCode)}</td>
+              <td class="text-muted">${esc(id.wbs)}</td>
+              <td><input class="form-control form-control-sm border-0 bg-transparent fw-semibold text-primary ydc-in" data-key="${esc(r.key)}" data-f="ysCode" maxlength="${MAX_CODE + 4}" value="${esc(r.code)}" ${dis}></td>
+              <td><input class="form-control form-control-sm border-0 bg-transparent fw-semibold text-dark ydc-in" data-key="${esc(r.key)}" data-f="ysDesc" maxlength="${MAX_DESC + 10}" value="${esc(r.desc)}" ${dis}></td>
+              <td>${esc(r.partNo)}</td>
+              <td>${esc(r.name)}</td>
+              <td class="text-center">${esc(r.qty)}</td>
+              <td>${esc(r.material)}</td>
+              <td class="text-center">${esc(r.weight)}</td>
+            </tr>`;
+        });
+        return html + `</tbody></table></div>`;
+      }
+
+      function sendButton(c, rows) {
+        if (c.pr.status !== 'draft') return '';
+        let n = collectNewCodes(c.proj, c.lr, rows).length;
+        return n
+          ? `<button class="btn btn-info btn-sm fw-bold text-white shadow-sm" onclick="ydcSendNewCodes()"><i class="fa fa-paper-plane me-1"></i>Send ${n} new code${n > 1 ? 's' : ''} to SAP Team</button>`
+          : `<button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="ydcSubmitBom()"><i class="fa fa-check-circle me-1"></i>Submit BOM to SAP</button>`;
+      }
+
+      // Refresh colours / values of the Stage 1 grid without re-drawing it,
+      // so focus and tab order survive while the PM types.
+      function refreshStage1InPlace(c) {
+        let rows = resolveRows(c.proj, c.loeIdx);
+        rows.forEach(r => {
+          let inputs = $('#ydcExcelTable .ydc-in').filter(function () { return $(this).data('key') === r.key; });
+          if (!inputs.length) return;
+          inputs.closest('tr').attr('class', 'ydc-excel-row ydc-c-' + r.level).attr('title', r.why);
+          inputs.each(function () {
+            if (this === document.activeElement) return;
+            $(this).val($(this).data('f') === 'ysCode' ? r.code : r.desc);
+          });
+        });
+        $('#ydcSendSlot').html(sendButton(c, rows));
+      }
+
+      // PM edits a code / description. A code typed for a standard part is
+      // remembered, so the same BOM line fills itself on the next project.
+      $(document).on('change', '#ydcExcelTable .ydc-in', async function () {
+        let c = current(); if (!c || c.pr.status !== 'draft') return;
+        let key = $(this).data('key'), f = $(this).data('f');
+        let v = clean($(this).val());
+        if (f === 'ysCode') v = v.toUpperCase();
+        let r = bomRows(c.lr).find(x => x.key === key); if (!r) return;
+        let auto = autoCode(r);
+        let o = c.pr.rows[key] = c.pr.rows[key] || {};
+        let autoVal = f === 'ysCode' ? auto.code : auto.desc;
+        if (v === autoVal) delete o[f]; else o[f] = v;
+        if (f === 'ysCode' && v && !YDC_STD.isProjectDrawingNo(r.partNo)) {
+          let hit = libGet(v);
+          MEMORY[memKey(r.partNo, r.name)] = { code: v, desc: o.ysDesc || (hit ? hit.desc : auto.desc) };
+          YDStore.saveMemory(MEMORY);
+        }
+        refreshStage1InPlace(c);
+        await YDStore.saveProjects();
+      });
+
+      // Paste a column from Excel: fills this cell and the ones below
+      $(document).on('paste', '#ydcExcelTable .ydc-in', function (e) {
+        let text = (e.originalEvent.clipboardData || w.clipboardData).getData('Text') || '';
+        let lines = text.split(/\r\n|\n|\r/).filter((x, i, a) => !(i === a.length - 1 && x === ''));
+        if (lines.length <= 1 && text.indexOf('\t') < 0) return;
+        e.preventDefault();
+        let f = $(this).data('f');
+        let inputs = $('#ydcExcelTable .ydc-in[data-f="' + f + '"]');
+        let start = inputs.index(this);
+        lines.forEach((line, i) => {
+          let inp = inputs.eq(start + i);
+          if (inp.length) inp.val(line.split('\t')[0]).trigger('change');
+        });
+      });
+
+      w.ydcSave = async function () {
+        await YDStore.saveProjects();
+        toast('Saved');
+      };
+
+      function validateForSend(c, rows) {
+        let id = ids(c.proj, c.lr);
+        let problems = [];
+        if (!id.yfCode) problems.push('YF code is missing');
+        if (!id.wbs) problems.push('WBS element is missing');
+        rows.filter(r => r.level === 'red').slice(0, 10).forEach(r => problems.push('Row ' + (r.i + 1) + ' (' + (r.name || r.partNo) + '): ' + r.why));
+        if (!LIB.count) problems.push('SAP library is not loaded — upload the latest Products export first');
+        return problems;
+      }
+
+      function writeWorkbook(sheets, fileName) {
+        let wb = XLSX.utils.book_new();
+        sheets.forEach(s => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s.rows), s.name));
+        XLSX.writeFile(wb, fileName);
+      }
+
+      function requestFile(c, list) {
+        let id = ids(c.proj, c.lr);
+        let rows = [['TYPE', 'CODE', 'DESCRIPTION', 'WBS ELEMENT', 'YF CODE', 'PROJECT', 'ASSEMBLY SR', 'ASSEMBLY']];
+        list.forEach(x => rows.push([x.kind, x.code, x.desc, id.wbs, id.yfCode, c.proj.projNo || '', c.lr.srNo || '', c.lr.assemblyName || '']));
+        writeWorkbook([{ name: 'New codes', rows: rows }], `New_SAP_Codes_${c.proj.projNo || 'TBD'}_${id.wbs || 'SR' + c.lr.srNo}_${today()}.xlsx`);
+      }
+
+      w.ydcSendNewCodes = async function () {
+        let c = current(); if (!c) return;
+        let rows = resolveRows(c.proj, c.loeIdx);
+        let problems = validateForSend(c, rows);
+        if (problems.length) return Swal.fire({ icon: 'warning', title: 'Fix these first', html: '<ul class="text-start small mb-0">' + problems.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' });
+        let list = collectNewCodes(c.proj, c.lr, rows);
+        let ok = await Swal.fire({
+          icon: 'question', title: 'Send ' + list.length + ' new code' + (list.length > 1 ? 's' : '') + '?',
+          html: `Only codes that are not yet in the SAP library go to <b>${SAP_TEAM}</b>.<br>A request file will download for them.`,
+          showCancelButton: true, confirmButtonText: 'Send'
+        });
+        if (!ok.isConfirmed) return;
+        c.pr.newCodes = list;
+        c.pr.status = 'codesSent';
+        c.pr.sentAt = new Date().toISOString();
+        c.pr.sentSig = bomSig(rows);
+        logHistory(c.proj, c.loeIdx, list.length + ' new code(s) sent to ' + SAP_TEAM);
+        await YDStore.saveProjects();
+        requestFile(c, list);
+        w._ydcState.stage = 'sapCheck';
+        renderAssembly();
+      };
+
+      // Final step of the code work: the whole BOM, with YF / WBS, for SAP
+      w.ydcSubmitBom = async function () {
+        let c = current(); if (!c) return;
+        let rows = resolveRows(c.proj, c.loeIdx);
+        if (c.pr.status === 'draft') {
+          let problems = validateForSend(c, rows);
+          if (problems.length) return Swal.fire({ icon: 'warning', title: 'Fix these first', html: '<ul class="text-start small mb-0">' + problems.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' });
+        } else if ((c.pr.newCodes || []).some(x => !x.created)) {
+          return Swal.fire('Waiting for SAP team', 'All new codes must be created in SAP before the BOM can be submitted.', 'warning');
+        }
+        let shared = rows.filter(r => r.requestedWith && !r.inLib);
+        if (shared.length) {
+          return Swal.fire('Waiting for SAP team', shared.length + ' code(s) here were requested with SR ' + Array.from(new Set(shared.map(r => r.requestedWith.sr))).join(', ') + ' and are not created yet.', 'warning');
+        }
+        let ok = await Swal.fire({ icon: 'question', title: 'Submit BOM to SAP?', text: 'Codes are locked after this and Ordering opens.', showCancelButton: true, confirmButtonText: 'Submit' });
+        if (!ok.isConfirmed) return;
+        let id = ids(c.proj, c.lr);
+        let sheet = [['YF CODE', 'YF DESCRIPTION', 'WBS ELEMENT', 'YSCODE', 'YSDESCRIPTION', 'QTY', 'MATERIAL', 'WEIGHT', 'PART / DRAWING NO.']];
+        rows.forEach(r => sheet.push([id.yfCode, id.yfDesc, id.wbs, r.code, r.desc, r.qty, r.material, r.weight, r.partNo]));
+        writeWorkbook([{ name: 'BOM to SAP', rows: sheet }], `BOM_to_SAP_${c.proj.projNo || 'TBD'}_${id.wbs || 'SR' + c.lr.srNo}_${today()}.xlsx`);
+        c.pr.status = 'bomSubmitted';
+        c.pr.submittedAt = new Date().toISOString();
+        if (!c.pr.sentSig) c.pr.sentSig = bomSig(rows);
+        logHistory(c.proj, c.loeIdx, 'BOM submitted to SAP (' + rows.length + ' components). Ordering opened.');
+        await YDStore.saveProjects();
+        w._ydcState.stage = 'ordering';
+        renderAssembly();
+      };
+
+      w.ydcReopen = async function () {
+        let c = current(); if (!c) return;
+        let ok = await Swal.fire({ icon: 'warning', title: 'Re-open Stage 1?', text: 'Codes become editable again. PO / Jobwork entries are kept.', showCancelButton: true, confirmButtonText: 'Re-open' });
+        if (!ok.isConfirmed) return;
+        c.pr.status = 'draft';
+        c.pr.sentSig = '';
+        logHistory(c.proj, c.loeIdx, 'Stage 1 re-opened');
+        await YDStore.saveProjects();
+        w._ydcState.stage = 'sap';
+        renderAssembly();
+      };
+
+      // ---- Stage 2: SAP Check ----
+      function stage2Html(c, rows) {
+        let list = c.pr.newCodes || [];
+        // a code that has appeared in a fresh library upload counts as created
+        let found = list.filter(x => !x.created && libGet(x.code) && !libGet(x.code).created);
+        found.forEach(x => { x.created = true; x.createdAt = LIB.loadedAt; });
+        if (found.length) {
+          logHistory(c.proj, c.loeIdx, found.length + ' new code(s) found in the updated SAP library');
+          YDStore.saveProjects();
+        }
+        let open = c.pr.status === 'codesSent';
+        let done = list.filter(x => x.created).length;
+        let all = done === list.length;
+        let html = `
+          <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <div>
+              <h5 class="mb-0 text-secondary"><i class="fa fa-user-check me-2"></i>Stage 2: SAP Check</h5>
+              <small class="text-muted">${list.length ? `${SAP_TEAM} creates these codes in SAP and ticks each one. ${done} of ${list.length} created.` : 'Every code was already in SAP — nothing to create.'}</small>
+            </div>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              ${list.length ? `<button class="btn btn-outline-primary btn-sm fw-bold" onclick="ydcDownloadRequest()"><i class="fa fa-download me-1"></i>Request file</button>` : ''}
+              ${open && !all ? `<button class="btn btn-outline-success btn-sm fw-bold" onclick="ydcMarkCreated(-1)"><i class="fa fa-check-double me-1"></i>Mark all created</button>` : ''}
+              ${open ? `<button class="btn btn-success btn-sm fw-bold shadow-sm" ${all ? '' : 'disabled'} onclick="ydcSubmitBom()"><i class="fa fa-check-circle me-1"></i>Submit BOM to SAP</button>
+                        <button class="btn btn-link btn-sm text-muted" onclick="ydcReopen()">Re-open Stage 1</button>` : ''}
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered bg-white text-nowrap shadow-sm assemblies" id="ydcExcelTable" style="font-size: 0.85rem;">
+              <thead><tr>
+                <th class="text-center" style="width:40px;">#</th><th>TYPE</th><th>CODE</th><th>DESCRIPTION</th><th>USED FOR</th>
+                <th class="text-center" style="width:150px;">CREATED IN SAP</th>
+              </tr></thead><tbody>`;
+        if (!list.length) html += `<tr><td colspan="6" class="text-center py-4 text-muted">No new codes were needed for this BOM.</td></tr>`;
+        list.forEach((x, i) => {
+          let r = rows.find(y => y.key === x.rowKey);
+          html += `
+            <tr class="ydc-excel-row ydc-c-${x.created ? 'green' : 'yellow'}">
+              <td class="text-center text-muted fw-bold">${i + 1}</td>
+              <td>${esc(x.kind)}</td>
+              <td class="fw-semibold text-primary">${esc(x.code)}</td>
+              <td>${esc(x.desc)}</td>
+              <td class="text-muted">${x.kind === 'YF' ? 'Assembly' : esc(r ? (r.partNo + ' · ' + r.name) : '')}</td>
+              <td class="text-center">${x.created
+                ? '<span class="text-success fw-semibold"><i class="fa fa-check me-1"></i>Created</span>'
+                : open ? `<button class="btn btn-sm btn-outline-success py-0" onclick="ydcMarkCreated(${i})">Mark created</button>` : '—'}</td>
+            </tr>`;
+        });
+        return html + `</tbody></table></div>`;
+      }
+
+      w.ydcDownloadRequest = function () {
+        let c = current(); if (c) requestFile(c, c.pr.newCodes || []);
+      };
+
+      w.ydcMarkCreated = async function (i) {
+        let c = current(); if (!c) return;
+        let list = c.pr.newCodes || [];
+        let targets = i < 0 ? list.filter(x => !x.created) : [list[i]];
+        targets.forEach(x => { x.created = true; x.createdAt = new Date().toISOString(); });
+        await addCreatedToLibrary(targets);
+        logHistory(c.proj, c.loeIdx, targets.length + ' code(s) created in SAP', SAP_TEAM);
+        if (list.every(x => x.created)) logHistory(c.proj, c.loeIdx, 'All new codes created — PM can submit the BOM', SAP_TEAM);
+        await YDStore.saveProjects();
+        renderAssembly();
+      };
+
+      // ---- Stage 3: Ordering ----
+      const ORDER_FIELDS = ['po1', 'po2', 'vendor1', 'vendor2', 'price1', 'price2', 'date1', 'date2', 'ready1', 'ready2'];
+
+      function stage3Html(c, rows) {
+        const pair = (r, f, type, ph, w) => `
+          <div class="d-flex flex-column gap-1" style="min-width: ${w}px;">
+            <input type="${type}" class="form-control form-control-sm py-0 px-1 border ydc-ord" data-key="${esc(r.key)}" data-f="${f}1" style="font-size: 0.72rem; height: 20px;" placeholder="${ph ? '1: ' + ph : ''}" value="${esc(r.order[f + '1'] || '')}">
+            <input type="${type}" class="form-control form-control-sm py-0 px-1 border ydc-ord" data-key="${esc(r.key)}" data-f="${f}2" style="font-size: 0.72rem; height: 20px;" placeholder="${ph ? '2: ' + ph : ''}" value="${esc(r.order[f + '2'] || '')}">
+          </div>`;
+        let html = `
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 text-secondary"><i class="fa fa-cart-shopping me-2"></i>Stage 3: Ordering</h5>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary btn-sm fw-bold" onclick="ydcSave()" title="Save"><i class="fa fa-save"></i></button>
+              <button class="btn btn-outline-primary btn-sm fw-bold" onclick="copyYDCExcelTable()" title="Copy"><i class="fa fa-copy"></i></button>
+              <button class="btn btn-outline-success btn-sm fw-bold" onclick="exportYDCExcelTable()" title="Export to Excel"><i class="fa fa-file-excel"></i></button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered table-hover bg-white text-nowrap shadow-sm align-middle assemblies" id="ydcExcelTable" style="font-size: 0.85rem;">
+              <thead class="text-center"><tr>
+                <th style="width: 40px;">#</th><th>YSCODE</th><th>YSDESCRIPTION</th><th>QTY</th><th>MATERIAL</th><th>WEIGHT</th>
+                <th>PO / Jobwork</th><th>Vendor / Operator</th><th>Price</th><th>Date of PO / Jobwork Creation</th><th>Tentative Ready Date</th>
+              </tr></thead><tbody>`;
+        if (!rows.length) html += `<tr><td colspan="11" class="text-center py-4 text-muted">No components in this BOM.</td></tr>`;
+        rows.forEach((r, n) => {
+          html += `
+            <tr class="ydc-excel-row">
+              <td class="text-center text-muted fw-bold">${n + 1}</td>
+              <td class="fw-semibold text-primary">${esc(r.code)}</td>
+              <td class="fw-semibold text-dark" style="white-space: normal; max-width: 220px;">${esc(r.desc)}</td>
+              <td class="text-center">${esc(r.qty)}</td>
+              <td>${esc(r.material || '—')}</td>
+              <td class="text-center">${esc(r.weight)}</td>
+              <td>${pair(r, 'po', 'text', 'PO / Jobwork', 140)}</td>
+              <td>${pair(r, 'vendor', 'text', 'Vendor / Operator', 150)}</td>
+              <td>${pair(r, 'price', 'number', 'Price', 90)}</td>
+              <td>${pair(r, 'date', 'date', '', 120)}</td>
+              <td>${pair(r, 'ready', 'date', '', 120)}</td>
+            </tr>`;
+        });
+        return html + `</tbody></table></div>`;
+      }
+
+      $(document).on('change', '#ydcExcelTable .ydc-ord', async function () {
+        let c = current(); if (!c) return;
+        let key = $(this).data('key'), f = $(this).data('f');
+        let o = c.pr.rows[key] = c.pr.rows[key] || {};
+        let v = clean($(this).val());
+        if (v) o[f] = v; else delete o[f];
+        await YDStore.saveProjects();
+      });
+
+      // ---- Copy / Export (from data, not the DOM) ----
+      function stageTable() {
+        let c = current(); if (!c) return null;
+        let rows = resolveRows(c.proj, c.loeIdx);
+        let id = ids(c.proj, c.lr);
+        let stage = w._ydcState.stage;
+        if (stage === 'sapCheck') {
+          let t = [['TYPE', 'CODE', 'DESCRIPTION', 'CREATED IN SAP']];
+          (c.pr.newCodes || []).forEach(x => t.push([x.kind, x.code, x.desc, x.created ? 'YES' : 'NO']));
+          return { c: c, id: id, name: 'SAP Check', t: t };
+        }
+        if (stage === 'ordering') {
+          let t = [['YSCODE', 'YSDESCRIPTION', 'QTY', 'MATERIAL', 'WEIGHT', 'LINE', 'PO / JOBWORK', 'VENDOR / OPERATOR', 'PRICE', 'PO / JOBWORK DATE', 'TENTATIVE READY DATE']];
+          rows.forEach(r => [1, 2].forEach(n => t.push([r.code, r.desc, r.qty, r.material, r.weight, n, r.order['po' + n] || '', r.order['vendor' + n] || '', r.order['price' + n] || '', r.order['date' + n] || '', r.order['ready' + n] || ''])));
+          return { c: c, id: id, name: 'Ordering', t: t };
+        }
+        let label = { green: 'In SAP', yellow: 'New / check', red: 'Missing' };
+        let t = [['YF CODE', 'WBS ELEMENT', 'YSCODE', 'YSDESCRIPTION', 'PART / DRAWING NO.', 'COMPONENT NAME', 'QTY', 'MATERIAL', 'WEIGHT', 'STATUS']];
+        rows.forEach(r => t.push([id.yfCode, id.wbs, r.code, r.desc, r.partNo, r.name, r.qty, r.material, r.weight, label[r.level]]));
+        return { c: c, id: id, name: 'BOM to SAP', t: t };
+      }
+
+      w.copyYDCExcelTable = function () {
+        let s = stageTable(); if (!s) return;
+        navigator.clipboard.writeText(s.t.map(r => r.join('\t')).join('\n')).then(() => toast('Copied to clipboard'));
+      };
+
+      w.exportYDCExcelTable = function () {
+        let s = stageTable(); if (!s) return;
+        writeWorkbook([{ name: s.name, rows: s.t }], `YDAstra_${s.c.proj.projNo || 'TBD'}_${s.id.wbs || 'SR' + s.c.lr.srNo}_${s.name.replace(/\s+/g, '')}_${today()}.xlsx`);
+      };
+
+      // ---- Column resize + right-click menu (width / copy) ----
       function initYDCColumnResizers() {
         $('#ydcExcelTable thead th').each(function () {
-          let th = $(this);
-          if (th.find('.ydc-col-resizer').length === 0) {
-            let resizer = $('<div class="ydc-col-resizer" title="Drag to adjust column width"></div>');
-            th.append(resizer);
-          }
+          if (!$(this).find('.ydc-col-resizer').length) $(this).append('<div class="ydc-col-resizer" title="Drag to adjust column width"></div>');
         });
       }
 
@@ -7372,598 +7253,51 @@
         _startX = e.pageX;
         _startWidth = _targetTh.outerWidth();
         $(this).addClass('resizing');
-
         $(document).on('mousemove.ydcColResize', function (e) {
-          let diff = e.pageX - _startX;
-          let newWidth = Math.max(40, _startWidth + diff);
-          _targetTh.css({ width: newWidth + 'px', minWidth: newWidth + 'px' });
+          let width = Math.max(40, _startWidth + e.pageX - _startX);
+          _targetTh.css({ width: width + 'px', minWidth: width + 'px' });
         });
-
         $(document).on('mouseup.ydcColResize', function () {
           $('.ydc-col-resizer').removeClass('resizing');
           $(document).off('mousemove.ydcColResize mouseup.ydcColResize');
         });
       });
 
-      window.setColumnWidth = function (colIdx) {
+      const cellText = cell => cell.find('input').length ? cell.find('input').map((i, x) => $(x).val()).get().join(' / ') : cell.text().trim();
+
+      w.setColumnWidth = function (colIdx) {
         let th = $('#ydcExcelTable thead th').eq(colIdx);
-        let headerText = th.contents().filter(function () { return this.nodeType === 3; }).text().trim() || ("Column " + (colIdx + 1));
-        let currentWidth = th.outerWidth();
-
-        Swal.fire({
-          title: `Adjust Column Width`,
-          text: `Column: ${headerText}`,
-          input: 'number',
-          inputValue: currentWidth,
-          inputLabel: 'Enter width in pixels (e.g. 250, 350, 450):',
-          showCancelButton: true,
-          confirmButtonText: 'Apply Width'
-        }).then((result) => {
-          if (result.isConfirmed && result.value) {
-            let w = parseInt(result.value);
-            if (w > 30) {
-              th.css({ width: w + 'px', minWidth: w + 'px' });
-            }
-          }
-        });
+        Swal.fire({ title: 'Adjust Column Width', text: 'Column: ' + th.text().trim(), input: 'number', inputValue: th.outerWidth(), showCancelButton: true, confirmButtonText: 'Apply Width' })
+          .then(r => { let v = parseInt(r.value, 10); if (r.isConfirmed && v > 30) th.css({ width: v + 'px', minWidth: v + 'px' }); });
       };
 
-      window.recalcRowYS = function (input) { };
-
-      window.addYDCExcelRow = function (st = {}) {
-        let tbody = $('#ydcExcelTable tbody');
-        tbody.find('.empty-row').remove();
-        let trCount = tbody.find('tr').length + 1;
-        let ysCode = st.ysCode || getYSCode(st.drawingNo, st.component);
-        let ysDesc = st.ysDescription || getYSDescription(st.component, st.drawingNo);
-
-        let dynamicCells = '';
-        window.ydcDynamicCols.forEach(c => {
-          let val = st[c.key] || '';
-          dynamicCells += `
-            <td class="align-middle">
-              <input type="text" class="form-control form-control-sm border-0 ydc-val-custom ydc-paste-target" data-field="${c.key}" value="${esc(val)}">
-            </td>`;
-        });
-
-        let tr = $(`
-              <tr class="ydc-excel-row">
-                <td class="text-center align-middle text-muted fw-bold row-num">${trCount}</td>
-                <td class="align-middle">
-                  <input type="text" class="form-control form-control-sm border-0 ydc-val-yscode ydc-paste-target fw-semibold text-primary" data-col="0" value="${esc(ysCode)}">
-                </td>
-                <td class="align-middle">
-                  <input type="text" class="form-control form-control-sm border-0 ydc-val-ysdesc ydc-paste-target fw-semibold text-dark" data-col="1" value="${esc(ysDesc)}">
-                </td>
-                <td class="align-middle ydc-text-dwg">${esc(st.drawingNo || '')}</td>
-                <td class="align-middle ydc-text-comp">${esc(st.component || '')}</td>
-                <td class="text-center align-middle ydc-text-qty">${esc(st.qty || '')}</td>
-                <td class="text-center align-middle ydc-text-wt">${esc(st.weight || '')}</td>
-                ${dynamicCells}
-                <td class="text-center align-middle">
-                  <button class="btn btn-sm btn-outline-danger border-0 bg-transparent text-danger" onclick="deleteYDCExcelRow(this)"><i class="fa fa-times"></i></button>
-                </td>
-              </tr>
-            `);
-        tbody.append(tr);
-        updateYDCExcelRowNumbers();
+      w.copyYDCColumn = function (colIdx) {
+        let vals = [$('#ydcExcelTable thead th').eq(colIdx).text().trim()];
+        $('#ydcExcelTable tbody tr.ydc-excel-row').each(function () { vals.push(cellText($(this).children('td').eq(colIdx))); });
+        navigator.clipboard.writeText(vals.join('\n')).then(() => toast('Column copied'));
       };
 
-      window.deleteYDCExcelRow = function (btn) {
-        $(btn).closest('tr').remove();
-        updateYDCExcelRowNumbers();
-      };
-
-      function updateYDCExcelRowNumbers() {
-        $('#ydcExcelTable tbody tr').each(function (i) {
-          $(this).find('.row-num').text(i + 1);
-        });
-      }
-
-      window.saveYDCExcelTable = async function () {
-        let proj = getP(w._ydcState.projId);
-        let loeIdx = w._ydcState.loeIdx;
-        let lr = proj && proj.loeData && proj.loeData[loeIdx];
-        if (!lr) return;
-
-        let saveFn = window.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
-
-        if (window.ydcActiveSubStage === 'fabrication') {
-          let subtasks = lr.subtasks || [];
-          $('#ydcExcelTable tbody tr.ydc-excel-row').each(function (idx) {
-            let st = subtasks[idx];
-            if (st) {
-              st.po1 = $(this).find('.ydc-val-po1').val().trim();
-              st.po2 = $(this).find('.ydc-val-po2').val().trim();
-              st.vendor1 = $(this).find('.ydc-val-vendor1').val().trim();
-              st.vendor2 = $(this).find('.ydc-val-vendor2').val().trim();
-              st.price1 = $(this).find('.ydc-val-price1').val().trim();
-              st.price2 = $(this).find('.ydc-val-price2').val().trim();
-              st.date1 = $(this).find('.ydc-val-date1').val().trim();
-              st.date2 = $(this).find('.ydc-val-date2').val().trim();
-              st.ready1 = $(this).find('.ydc-val-ready1').val().trim();
-              st.ready2 = $(this).find('.ydc-val-ready2').val().trim();
-            }
-          });
-
-          if (saveFn) await saveFn();
-
-          if (!proj.ydcHistory) proj.ydcHistory = [];
-          proj.ydcHistory.push({
-            loeIdx: loeIdx,
-            timestamp: new Date().toISOString(),
-            user: "Admin",
-            action: "Fabrication/Machining details saved."
-          });
-          if (saveFn) await saveFn();
-
-          Swal.fire({ icon: 'success', title: 'Saved!', text: 'Fabrication details saved successfully.', timer: 1500, showConfirmButton: false });
-          renderAssemblyExcelTable(proj, loeIdx);
-
-        } else if (window.ydcActiveSubStage === 'sapCheck') {
-          let subtasks = lr.subtasks || [];
-          $('#ydcExcelTable tbody tr.ydc-excel-row').each(function (idx) {
-            let ysCodeInput = $(this).find('.ydc-val-yscode');
-            let ysDescInput = $(this).find('.ydc-val-ysdesc');
-
-            if (subtasks[idx]) {
-              if (ysCodeInput.length) subtasks[idx].ysCode = ysCodeInput.val().trim();
-              if (ysDescInput.length) subtasks[idx].ysDescription = ysDescInput.val().trim();
-            }
-          });
-
-          if (saveFn) await saveFn();
-
-          if (!proj.ydcHistory) proj.ydcHistory = [];
-          proj.ydcHistory.push({
-            loeIdx: loeIdx,
-            timestamp: new Date().toISOString(),
-            user: "SAP Team",
-            action: "YS Codes & Descriptions reviewed and saved by SAP Team."
-          });
-          if (saveFn) await saveFn();
-
-          Swal.fire({ icon: 'success', title: 'Saved!', text: 'YS Codes & Descriptions saved successfully.', timer: 1500, showConfirmButton: false });
-          renderAssemblyExcelTable(proj, loeIdx);
-
-        } else {
-          let subtasks = [];
-          $('#ydcExcelTable tbody tr.ydc-excel-row').each(function () {
-            let ysCode = $(this).find('.ydc-val-yscode').val().trim();
-            let ysDesc = $(this).find('.ydc-val-ysdesc').val().trim();
-            let dwg = $(this).find('.ydc-text-dwg').text().trim();
-            let comp = $(this).find('.ydc-text-comp').text().trim();
-            let qty = $(this).find('.ydc-text-qty').text().trim();
-            let wt = $(this).find('.ydc-text-wt').text().trim();
-
-            let customFields = {};
-            $(this).find('.ydc-val-custom').each(function () {
-              let field = $(this).data('field');
-              customFields[field] = $(this).val().trim();
-            });
-
-            if (ysCode || ysDesc || comp || dwg || qty || wt) {
-              subtasks.push({
-                ysCode: ysCode,
-                ysDescription: ysDesc,
-                component: comp,
-                drawingNo: dwg,
-                qty: qty,
-                weight: wt,
-                ...customFields
-              });
-            }
-          });
-
-          lr.subtasks = subtasks;
-
-          if (proj.execution && proj.execution.assemblies) {
-            proj.execution.assemblies = proj.execution.assemblies.filter(x => x.loeIdx !== loeIdx);
-          }
-
-          if (saveFn) await saveFn();
-
-          if (!proj.ydcHistory) proj.ydcHistory = [];
-          proj.ydcHistory.push({
-            loeIdx: loeIdx,
-            timestamp: new Date().toISOString(),
-            user: "Admin",
-            action: "BOM updated & saved in SAP stage (" + subtasks.length + " items)"
-          });
-          if (saveFn) await saveFn();
-
-          Swal.fire({ icon: 'success', title: 'Saved!', text: 'BOM updated successfully.', timer: 1500, showConfirmButton: false });
-          renderAssemblyExcelTable(proj, loeIdx);
-        }
-      };
-
-      window.copyYDCExcelTable = function () {
-        let text = "";
-        if (window.ydcActiveSubStage === 'fabrication') {
-          text = "YSCODE\tYSDESCRIPTION\tQTY\tMATERIAL\tWEIGHT\tPO 1 / JW 1\tPO 2 / JW 2\tVENDOR 1 / OP 1\tVENDOR 2 / OP 2\tPRICE 1\tPRICE 2\tDATE 1\tDATE 2\tREADY DATE 1\tREADY DATE 2\n";
-          $('#ydcExcelTable tbody tr.ydc-excel-row').each(function () {
-            let row = [];
-            row.push($(this).find('.ydc-text-yscode').text().trim());
-            row.push($(this).find('.ydc-text-ysdesc').text().trim());
-            row.push($(this).find('.ydc-text-qty').text().trim());
-            row.push($(this).find('.ydc-text-material').text().trim());
-            row.push($(this).find('.ydc-text-wt').text().trim());
-            row.push($(this).find('.ydc-val-po1').val().trim());
-            row.push($(this).find('.ydc-val-po2').val().trim());
-            row.push($(this).find('.ydc-val-vendor1').val().trim());
-            row.push($(this).find('.ydc-val-vendor2').val().trim());
-            row.push($(this).find('.ydc-val-price1').val().trim());
-            row.push($(this).find('.ydc-val-price2').val().trim());
-            row.push($(this).find('.ydc-val-date1').val().trim());
-            row.push($(this).find('.ydc-val-date2').val().trim());
-            row.push($(this).find('.ydc-val-ready1').val().trim());
-            row.push($(this).find('.ydc-val-ready2').val().trim());
-            text += row.join('\t') + '\n';
-          });
-        } else if (window.ydcActiveSubStage === 'sapCheck') {
-          text = "YSCODE\tYSDESCRIPTION\tDRAWING NUMBER\tCOMPONENT NAME\tQUANTITY\tWEIGHT\tREVIEW STATUS\n";
-          $('#ydcExcelTable tbody tr.ydc-excel-row').each(function () {
-            let row = [];
-            row.push($(this).find('.ydc-text-yscode').text().trim());
-            row.push($(this).find('.ydc-text-ysdesc').text().trim());
-            row.push($(this).find('.ydc-text-dwg').text().trim());
-            row.push($(this).find('.ydc-text-comp').text().trim());
-            row.push($(this).find('.ydc-text-qty').text().trim());
-            row.push($(this).find('.ydc-text-wt').text().trim());
-            row.push($(this).find('.badge').text().trim());
-            text += row.join('\t') + '\n';
-          });
-        } else {
-          let dynamicHeaderStr = window.ydcDynamicCols.map(c => c.label).join('\t');
-          let headerPrefix = dynamicHeaderStr ? ('\t' + dynamicHeaderStr) : '';
-          text = "YSCODE\tYSDESCRIPTION\tDRAWING NUMBER\tCOMPONENT NAME\tQUANTITY\tWEIGHT" + headerPrefix + "\n";
-          $('#ydcExcelTable tbody tr.ydc-excel-row').each(function () {
-            let row = [];
-            row.push($(this).find('.ydc-val-yscode').val().trim());
-            row.push($(this).find('.ydc-val-ysdesc').val().trim());
-            row.push($(this).find('.ydc-text-dwg').text().trim());
-            row.push($(this).find('.ydc-text-comp').text().trim());
-            row.push($(this).find('.ydc-text-qty').text().trim());
-            row.push($(this).find('.ydc-text-wt').text().trim());
-            $(this).find('.ydc-val-custom').each(function () {
-              row.push($(this).val().trim());
-            });
-            text += row.join('\t') + '\n';
-          });
-        }
-        navigator.clipboard.writeText(text).then(() => {
-          Swal.fire({ icon: 'success', title: 'Copied!', text: 'Table data copied to clipboard.', timer: 1500, showConfirmButton: false });
-        });
-      };
-
-      window.exportYDCExcelTable = function () {
-        let table = document.getElementById("ydcExcelTable");
-        let wb = XLSX.utils.table_to_book(table, { sheet: "BOM" });
-        XLSX.writeFile(wb, "BOM_Export.xlsx");
-      };
-
-      window.copyYDCColumn = function (colIdx) {
-        let vals = [];
-        let header = $('#ydcExcelTable thead th').eq(colIdx).contents().filter(function () {
-          return this.nodeType === 3;
-        }).text().trim();
-        if (!header) header = "Column " + colIdx;
-        vals.push(header);
-
-        $('#ydcExcelTable tbody tr.ydc-excel-row').each(function () {
-          let cell = $(this).children('td').eq(colIdx);
-          let val = '';
-          if (cell.find('input').length) {
-            val = cell.find('input').val().trim();
-          } else {
-            val = cell.text().trim();
-          }
-          vals.push(val);
-        });
-
-        navigator.clipboard.writeText(vals.join('\n')).then(() => {
-          Swal.fire({ icon: 'success', title: 'Column Copied!', text: 'Column values copied to clipboard.', timer: 1500, showConfirmButton: false });
-        });
-      };
-
-      window.copyYdcRowAt = function (rowIdx) {
+      w.copyYdcRowAt = function (rowIdx) {
         let tr = $('#ydcExcelTable tbody tr.ydc-excel-row').eq(rowIdx);
-        let row = [];
-        if (window.ydcActiveSubStage === 'fabrication') {
-          row.push(tr.find('.ydc-text-yscode').text().trim());
-          row.push(tr.find('.ydc-text-ysdesc').text().trim());
-          row.push(tr.find('.ydc-text-qty').text().trim());
-          row.push(tr.find('.ydc-text-material').text().trim());
-          row.push(tr.find('.ydc-text-wt').text().trim());
-          row.push(tr.find('.ydc-val-po1').val().trim());
-          row.push(tr.find('.ydc-val-po2').val().trim());
-          row.push(tr.find('.ydc-val-vendor1').val().trim());
-          row.push(tr.find('.ydc-val-vendor2').val().trim());
-          row.push(tr.find('.ydc-val-price1').val().trim());
-          row.push(tr.find('.ydc-val-price2').val().trim());
-          row.push(tr.find('.ydc-val-date1').val().trim());
-          row.push(tr.find('.ydc-val-date2').val().trim());
-          row.push(tr.find('.ydc-val-ready1').val().trim());
-          row.push(tr.find('.ydc-val-ready2').val().trim());
-        } else {
-          row.push(tr.find('.ydc-val-yscode').val().trim());
-          row.push(tr.find('.ydc-val-ysdesc').val().trim());
-          row.push(tr.find('.ydc-text-dwg').text().trim());
-          row.push(tr.find('.ydc-text-comp').text().trim());
-          row.push(tr.find('.ydc-text-qty').text().trim());
-          row.push(tr.find('.ydc-text-wt').text().trim());
-          tr.find('.ydc-val-custom').each(function () {
-            row.push($(this).val().trim());
-          });
-        }
-        navigator.clipboard.writeText(row.join('\t')).then(() => {
-          Swal.fire({ icon: 'success', title: 'Row Copied!', text: 'Row data copied to clipboard.', timer: 1500, showConfirmButton: false });
-        });
-      };
-
-      window.addYdcRowAt = function (rowIdx) {
-        let tbody = $('#ydcExcelTable tbody');
-        addYDCExcelRow();
-        let newTr = tbody.find('tr.ydc-excel-row').last();
-        let targetTr = tbody.find('tr.ydc-excel-row').eq(rowIdx);
-        if (targetTr.length) {
-          newTr.insertAfter(targetTr);
-        }
-        updateYDCExcelRowNumbers();
-      };
-
-      window.deleteYdcRowAt = function (rowIdx) {
-        $('#ydcExcelTable tbody tr.ydc-excel-row').eq(rowIdx).remove();
-        updateYDCExcelRowNumbers();
+        navigator.clipboard.writeText(tr.children('td').map((i, td) => cellText($(td))).get().join('\t')).then(() => toast('Row copied'));
       };
 
       $(document).on('contextmenu', '#ydcExcelTable th, #ydcExcelTable td', function (e) {
         e.preventDefault();
-        e.stopPropagation();
-
-        let menu = $('#ydcContextMenu');
-        let menuHtml = '';
-        let target = $(e.target);
-
-        if (window.ydcActiveSubStage === 'fabrication') {
-          if (target.closest('th').length) {
-            let th = target.closest('th');
-            let colIdx = th.index();
-            menuHtml = `
-              <a class="dropdown-item" onclick="setColumnWidth(${colIdx})"><i class="fa fa-arrows-alt-h me-2 text-info"></i>Adjust Column Width...</a>
-              <a class="dropdown-item" onclick="copyYDCColumn(${colIdx})"><i class="fa fa-copy me-2 text-primary"></i>Copy Column</a>
-            `;
-          } else if (target.closest('td').length) {
-            let tr = target.closest('tr');
-            if (tr.hasClass('ydc-excel-row')) {
-              let rowIdx = tr.index();
-              menuHtml = `
-                <a class="dropdown-item" onclick="copyYdcRowAt(${rowIdx})"><i class="fa fa-copy me-2 text-primary"></i>Copy Row</a>
-              `;
-            }
-          }
-        } else {
-          let sapSent = getP(w._ydcState.projId)?.loeData?.[w._ydcState.loeIdx]?.sapSent;
-          if (target.closest('th').length) {
-            let th = target.closest('th');
-            let colIdx = th.index();
-            let totalCols = th.closest('tr').children('th').length;
-            if (!sapSent && colIdx > 0 && colIdx < totalCols - 1) {
-              menuHtml = `
-                <a class="dropdown-item" onclick="addYDCColumn()"><i class="fa fa-plus me-2 text-success"></i>Add Column</a>
-                <a class="dropdown-item" onclick="setColumnWidth(${colIdx})"><i class="fa fa-arrows-alt-h me-2 text-info"></i>Adjust Column Width...</a>
-                <a class="dropdown-item" onclick="copyYDCColumn(${colIdx})"><i class="fa fa-copy me-2 text-primary"></i>Copy Column</a>
-              `;
-            } else {
-              menuHtml = `
-                <a class="dropdown-item" onclick="setColumnWidth(${colIdx})"><i class="fa fa-arrows-alt-h me-2 text-info"></i>Adjust Column Width...</a>
-                <a class="dropdown-item" onclick="copyYDCColumn(${colIdx})"><i class="fa fa-copy me-2 text-primary"></i>Copy Column</a>
-              `;
-            }
-          } else if (target.closest('td').length) {
-            let tr = target.closest('tr');
-            if (tr.hasClass('ydc-excel-row')) {
-              let rowIdx = tr.index();
-              if (!sapSent) {
-                menuHtml = `
-                  <a class="dropdown-item" onclick="addYdcRowAt(${rowIdx})"><i class="fa fa-plus me-2 text-success"></i>Add Row Below</a>
-                  <a class="dropdown-item" onclick="copyYdcRowAt(${rowIdx})"><i class="fa fa-copy me-2 text-primary"></i>Copy Row</a>
-                  <a class="dropdown-item" onclick="deleteYdcRowAt(${rowIdx})"><i class="fa fa-trash me-2 text-danger"></i>Delete Row</a>
-                `;
-              } else {
-                menuHtml = `
-                  <a class="dropdown-item" onclick="copyYdcRowAt(${rowIdx})"><i class="fa fa-copy me-2 text-primary"></i>Copy Row</a>
-                `;
-              }
-            }
-          }
+        let th = $(e.target).closest('th'), tr = $(e.target).closest('tr.ydc-excel-row');
+        let menu = '';
+        if (th.length) {
+          menu = `<a class="dropdown-item" onclick="setColumnWidth(${th.index()})"><i class="fa fa-arrows-alt-h me-2 text-info"></i>Adjust Column Width...</a>
+                  <a class="dropdown-item" onclick="copyYDCColumn(${th.index()})"><i class="fa fa-copy me-2 text-primary"></i>Copy Column</a>`;
+        } else if (tr.length) {
+          menu = `<a class="dropdown-item" onclick="copyYdcRowAt(${tr.index('#ydcExcelTable tbody tr.ydc-excel-row')})"><i class="fa fa-copy me-2 text-primary"></i>Copy Row</a>`;
         }
-
-        if (menuHtml) {
-          menu.html(menuHtml).css({
-            display: 'block',
-            left: e.pageX + 'px',
-            top: e.pageY + 'px'
-          });
-        } else {
-          menu.hide();
-        }
+        if (menu) $('#ydcContextMenu').html(menu).css({ display: 'block', left: e.pageX + 'px', top: e.pageY + 'px' });
       });
-
-      $(document).on('click', function () {
-        $('#ydcContextMenu').hide();
-      });
+      $(document).on('click', function () { $('#ydcContextMenu').hide(); });
 
       // ================================================================
-      // Stage panel open / close
-      // ================================================================
-      w.openYDCStagePanel = function (projId, loeIdx, stageName) {
-        w._ydcState.stage = stageName;
-        let proj = getP(projId);
-        if (!proj) return;
-        renderWorkflowCards(proj, loeIdx);
-        renderAllPanels(proj, loeIdx);
-        let panel = document.getElementById('ydcPanel_' + stageName);
-        if (panel) setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
-      };
-
-      w.ydcClosePanel = function () {
-        w._ydcState.stage = null;
-        let s = w._ydcState;
-        if (s.projId != null && s.loeIdx != null) {
-          let proj = getP(s.projId);
-          if (proj) { renderWorkflowCards(proj, s.loeIdx); renderAllPanels(proj, s.loeIdx); }
-        }
-      };
-
-      // ================================================================
-      // Stage execution table builder
-      // ================================================================
-      function buildStageTable(proj, loeIdx, stageName, asm) {
-        let cols = YDC_COLS[stageName] || [];
-        let rows = asm[stageName] || [];
-        let lr = proj.loeData && proj.loeData[loeIdx];
-        let isBoughtOut = !(lr && lr.subtasks && lr.subtasks.length);
-
-        if ((stageName === 'arranging' || stageName === 'assembly') && !rows.length) {
-          return `<div class="text-center text-muted py-4"><i class="fa fa-hourglass-half me-2 opacity-50"></i>Coming soon — this stage will be enabled after upstream stages are configured.</div>`;
-        }
-
-        let hasQty = (stageName === 'fabrication' || stageName === 'machining');
-
-        let thead = '<th style="width:36px;text-align:center;">#</th>';
-        thead += '<th style="min-width:150px;">Component</th>';
-        if (hasQty) { thead += '<th style="width:60px;">Qty</th><th style="width:100px;">Material</th>'; }
-        cols.forEach(c => { thead += `<th style="width:${c.w || '120px'};">${c.label}</th>`; });
-        thead += '<th style="width:65px;">Save</th><th style="width:78px;">Submit</th>';
-
-        let tbody = '';
-        rows.forEach((row, i) => {
-          let submitted = row.status === 'submitted';
-          let rowCls = submitted ? 'ydc-submitted-row' : '';
-          let cells = '';
-          cols.forEach(c => {
-            let v = row[c.key] != null ? row[c.key] : '';
-            if (c.type === 'text') {
-              cells += `<td><input type="text" class="form-control form-control-sm ydc-inp" data-field="${c.key}" value="${esc(v)}"${submitted ? ' readonly' : ''}></td>`;
-            } else if (c.type === 'date') {
-              cells += `<td><input type="date" class="form-control form-control-sm ydc-inp" data-field="${c.key}" value="${esc(v)}"${submitted ? ' readonly' : ''}></td>`;
-            } else if (c.type === 'select') {
-              let opts = (c.options || []).map(o => `<option value="${o}"${v === o ? ' selected' : ''}>${o || '—'}</option>`).join('');
-              cells += `<td><select class="form-select form-select-sm ydc-inp" data-field="${c.key}"${submitted ? ' disabled' : ''}>${opts}</select></td>`;
-            } else if (c.type === 'checkbox') {
-              cells += `<td style="text-align:center;"><input type="checkbox" class="form-check-input ydc-inp" data-field="${c.key}"${v ? ' checked' : ''}${submitted ? ' disabled' : ''}></td>`;
-            }
-          });
-
-          let saveBtn = submitted
-            ? `<button class="ydc-save-btn" disabled><i class="fa fa-check text-success"></i></button>`
-            : `<button class="ydc-save-btn" onclick="ydcSaveRow('${proj.id}',${loeIdx},'${stageName}','${row.componentId}',this)"><i class="fa fa-floppy-disk me-1"></i>Save</button>`;
-          let subBtn = submitted
-            ? `<span class="badge bg-success" style="font-size:0.72rem;padding:4px 7px;"><i class="fa fa-check me-1"></i>Done</span>`
-            : `<button class="ydc-submit-btn" onclick="ydcSubmitRow('${proj.id}',${loeIdx},'${stageName}','${row.componentId}',this)"><i class="fa fa-paper-plane me-1"></i>Submit</button>`;
-
-          tbody += `
-            <tr class="${rowCls}" id="ydcRow_${row.componentId}">
-              <td style="text-align:center;color:#6c757d;font-weight:600;font-size:0.76rem;">${i + 1}</td>
-              <td>
-                <span class="fw-bold" style="font-size:0.82rem;">${esc(row.component) || '<span class="text-muted fst-italic">—</span>'}</span>
-                ${isBoughtOut ? '<br><small class="text-muted fst-italic" style="font-size:0.7rem;">Bought-Out</small>' : ''}
-              </td>
-              ${hasQty ? `<td style="text-align:center;" class="text-muted">${esc(row.qty || '—')}</td><td class="text-muted">${esc(row.material || '—')}</td>` : ''}
-              ${cells}
-              <td>${saveBtn}</td>
-              <td>${subBtn}</td>
-            </tr>`;
-        });
-
-        let addRowSection = (isBoughtOut && stageName !== 'arranging' && stageName !== 'assembly')
-          ? `<div class="p-2 border-top bg-light text-end"><button class="btn btn-sm btn-outline-primary" onclick="ydcAddRow('${proj.id}',${loeIdx},'${stageName}')"><i class="fa fa-plus me-1"></i>Add Component Row</button></div>`
-          : '';
-
-        return `
-          <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
-            <table class="table table-bordered table-hover ydc-table mb-0" style="min-width:680px;">
-              <thead><tr>${thead}</tr></thead>
-              <tbody>${tbody || '<tr><td colspan="20" class="text-center text-muted py-4"><i class="fa fa-folder-open me-2 opacity-50"></i>No components. Use Add Row below.</td></tr>'}</tbody>
-            </table>
-          </div>${addRowSection}`;
-      }
-
-      // ================================================================
-      // Save / Submit / Add Row
-      // ================================================================
-      function collectFromDOM(componentId, row) {
-        let tr = document.getElementById('ydcRow_' + componentId);
-        if (!tr) return;
-        tr.querySelectorAll('.ydc-inp').forEach(inp => {
-          let f = inp.dataset.field;
-          if (!f) return;
-          row[f] = inp.type === 'checkbox' ? inp.checked : inp.value;
-        });
-      }
-
-      w.ydcSaveRow = async function (projId, loeIdx, stageName, componentId, btn) {
-        let proj = getP(projId);
-        if (!proj) return;
-        let a = getExec(proj, loeIdx);
-        let row = (a[stageName] || []).find(r => r.componentId === componentId);
-        if (!row) return;
-        collectFromDOM(componentId, row);
-        if (row.status !== 'submitted') row.status = 'saved';
-        if (w.saveProjects) await w.saveProjects();
-        refreshStats(proj, loeIdx);
-        if (btn) {
-          let orig = btn.innerHTML;
-          btn.innerHTML = '<i class="fa fa-check text-success me-1"></i>Saved!';
-          btn.disabled = true;
-          setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 1600);
-        }
-      };
-
-      w.ydcSubmitRow = async function (projId, loeIdx, stageName, componentId, btn) {
-        let proj = getP(projId);
-        if (!proj) return;
-        let a = getExec(proj, loeIdx);
-        let row = (a[stageName] || []).find(r => r.componentId === componentId);
-        if (!row) return;
-        collectFromDOM(componentId, row);
-        row.status = 'submitted';
-        row.submittedAt = new Date().toISOString();
-        if (w.saveProjects) await w.saveProjects();
-
-        // Visually update row without re-render (keeps other open inputs stable)
-        let tr = document.getElementById('ydcRow_' + componentId);
-        if (tr) {
-          tr.classList.add('ydc-submitted-row');
-          tr.querySelectorAll('input, select').forEach(el => { el.disabled = true; });
-          let tds = tr.querySelectorAll('td');
-          let n = tds.length;
-          if (n >= 2) {
-            tds[n - 2].innerHTML = '<button class="ydc-save-btn" disabled><i class="fa fa-check text-success"></i></button>';
-            tds[n - 1].innerHTML = '<span class="badge bg-success" style="font-size:0.72rem;padding:4px 7px;"><i class="fa fa-check me-1"></i>Done</span>';
-          }
-        }
-        refreshStats(proj, loeIdx);
-        if (w.Swal) w.Swal.fire({ icon: 'success', title: 'Component Submitted', text: 'Component marked ready for next stage.', timer: 1500, showConfirmButton: false });
-      };
-
-      w.ydcAddRow = async function (projId, loeIdx, stageName) {
-        let proj = getP(projId);
-        if (!proj) return;
-        let a = getExec(proj, loeIdx);
-        if (!a[stageName]) a[stageName] = [];
-        a[stageName].push({ componentId: 'comp_' + loeIdx + '_' + Date.now(), component: '', qty: '', material: '', status: 'pending' });
-        if (w.saveProjects) await w.saveProjects();
-        w.openYDCStagePanel(projId, loeIdx, stageName);
-      };
-
-      function refreshStats(proj, loeIdx) {
-        if (document.getElementById('ydcAsmStats')) renderAsmStatsStrip(proj, loeIdx);
-      }
-
-      // ================================================================
-      // Patch: wrap existing view-switchers to also hide YDC views
+      // Wrap the existing view switchers so they also hide YDAstra views
       // ================================================================
       let _origDashView = w.showDashboardView;
       w.showDashboardView = function () {
@@ -7978,10 +7312,7 @@
         if (_origDrawView) _origDrawView.call(this, projId);
       };
 
-      // ---- Expose on window so HTML onclick attributes can reach them ----
-      w.openYDAstraProject = w.openYDAstraProject;   // already set
-      w.openYDAstraAssembly = w.openYDAstraAssembly;  // already set
-
+      $(initLibrary);
     })(window);
   </script>
 </body>
