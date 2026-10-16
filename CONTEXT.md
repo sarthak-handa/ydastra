@@ -200,6 +200,12 @@ designStatus, dispatchWeek, billingValue, releaseWeek`, plus:
   these). Hand edits in the Components window set `subtasksManual`.
 - `procurement` — YDAstra record (see §7).
 
+**BOM rule:** a BOM goes only on a row with nothing under it. With SR 1, 1.1,
+1.2, 2, 3, 4, 4.1 the BOMs are on 1.1, 1.2, 2, 3 and 4.1 — never on 1 or 4.
+The Drawings page shows parent rows as summaries (no upload box), the bulk
+upload window offers only those rows for a BOM file, and in the Library an
+assembly with subassemblies takes drawings but no BOM.
+
 `mergeLoeData()` keeps `rowId`, `drawingFiles`, `bomFiles`, `subtasks` and
 `procurement` when an LOE is re-uploaded. Drawings hierarchy follows live:
 whole-number SR = parent, dotted = child, non-numeric SR = section bar, a

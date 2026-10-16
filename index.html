@@ -2863,15 +2863,16 @@
 
   <!-- Bulk Upload Mapping Confirmation Modal -->
   <div class="modal fade" id="bulkUploadMappingModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
       <div class="modal-content shadow-lg border-0" style="border-radius: 12px;">
         <div class="modal-header bg-dark text-white">
           <h5 class="modal-title"><i class="fa fa-map-marked-alt me-2 text-warning"></i>Confirm Bulk Upload Mapping</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body p-3 bg-light">
-          <p class="text-muted small mb-3">Review the mapped assemblies for each file. You can change the mapping
-            dropdown if a file name does not match the drawing/doc number.</p>
+          <p class="text-muted small mb-3">Check the assembly each file goes to and change it if the file name did not
+            match. For an assembly that already has a BOM, choose whether the new BOM is added or replaces it.
+            Skip removes a file picked by mistake.</p>
           <div class="table-responsive">
             <table class="table table-sm table-hover table-bordered bg-white align-middle" id="bulkUploadMappingTable"
               style="font-size: 0.85rem;">
@@ -2879,8 +2880,10 @@
                 <tr>
                   <th>File Name</th>
                   <th style="width: 100px;">Type</th>
-                  <th>Mapped Assembly / Drawing Number</th>
+                  <th style="min-width: 240px;">Mapped Assembly</th>
+                  <th>Drawing Number</th>
                   <th style="width: 120px;" class="text-center">Status</th>
+                  <th style="width: 190px;" class="text-center">Action</th>
                 </tr>
               </thead>
               <tbody id="bulkUploadMappingBody">
@@ -2891,7 +2894,8 @@
         </div>
         <div class="modal-footer bg-light border-top">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-success btn-sm fw-bold" onclick="submitBulkUploadMapping()"><i
+          <span class="me-auto small text-muted" id="bulkUploadCount"></span>
+          <button type="button" class="btn btn-success btn-sm fw-bold" id="btnBulkUploadSubmit" onclick="submitBulkUploadMapping()"><i
               class="fa fa-check-circle me-1"></i>Confirm & Submit Upload</button>
         </div>
       </div>
@@ -5966,6 +5970,17 @@
         return String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       }
 
+      // BOMs go only on rows with nothing under them: with 1, 1.1, 1.2, 2, 3, 4, 4.1
+      // the BOM rows are 1.1, 1.2, 2, 3 and 4.1 — never 1 or 4.
+      let bomParents = new Set(), lastWhole = {};
+      proj.loeData.forEach((loe, idx) => {
+        let sr = String(loe.srNo || '').trim(), sheet = loe.sheetName || '';
+        if (window.isDividerRow && window.isDividerRow(loe)) { lastWhole = {}; return; }
+        if (/^\d+$/.test(sr)) lastWhole[sheet] = { sr: sr, idx: idx };
+        else if (sr.includes('.') && lastWhole[sheet] && lastWhole[sheet].sr === sr.split('.')[0]) bomParents.add(lastWhole[sheet].idx);
+      });
+      window._bulkBomParents = bomParents;
+
       let tbodyHtml = '';
       files.forEach((file, fileIdx) => {
         let filename = file.name;
@@ -5974,52 +5989,108 @@
         let ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
         let isExcel = ext === '.xlsx' || ext === '.xls' || ext === '.csv';
 
-        let matchedLoeIdx = proj.loeData.findIndex(loe => {
-          let normDwg = normalizeDwgNo(loe.drawingNo);
-          let normName = normalizeDwgNo(loe.assemblyName);
-          return (normDwg && (normDwg === normBase || normDwg.includes(normBase) || normBase.includes(normDwg))) ||
-            (normName && (normName === normBase || normName.includes(normBase) || normBase.includes(normName)));
-        });
+        // best match first: drawing number, then assembly name (longest name wins)
+        const allowed = i => !(isExcel && bomParents.has(i)) && !(window.isDividerRow && window.isDividerRow(proj.loeData[i]));
+        const firstIdx = test => proj.loeData.findIndex((loe, i) => allowed(i) && test(normalizeDwgNo(loe.drawingNo), normalizeDwgNo(loe.assemblyName)));
+        let matchedLoeIdx = firstIdx(d => d && d === normBase);
+        if (matchedLoeIdx === -1) matchedLoeIdx = firstIdx(d => d && (normBase.includes(d) || d.includes(normBase)));
+        if (matchedLoeIdx === -1) matchedLoeIdx = firstIdx((d, n) => n && n === normBase);
+        if (matchedLoeIdx === -1) {
+          let best = -1, len = 0;
+          proj.loeData.forEach((loe, i) => {
+            let n = normalizeDwgNo(loe.assemblyName);
+            if (allowed(i) && n && n.length > len && (normBase.includes(n) || n.includes(normBase))) { best = i; len = n.length; }
+          });
+          matchedLoeIdx = best;
+        }
 
         let fileTypeBadge = isExcel ? '<span class="badge bg-success">BOM Excel</span>' : '<span class="badge bg-primary">Drawing PDF</span>';
-        let rowOptionsHtml = `<option value="-1">-- Select Assembly (Ignore file) --</option>`;
+        let rowOptionsHtml = `<option value="-1">-- Select Assembly --</option>`;
         proj.loeData.forEach((loe, idx) => {
+          if (!allowed(idx)) return; // a BOM file lists only the rows that take a BOM
           let selected = idx === matchedLoeIdx ? 'selected' : '';
-          rowOptionsHtml += `<option value="${idx}" ${selected}>[${loe.srNo || (idx + 1)}] ${escapeHtml(loe.assemblyName)} (${escapeHtml(loe.drawingNo || 'No Doc')})</option>`;
+          rowOptionsHtml += `<option value="${idx}" data-dwg="${escapeHtml(loe.drawingNo || '')}" ${selected}>[${escapeHtml(loe.srNo || (idx + 1))}] ${escapeHtml(loe.assemblyName)}</option>`;
         });
 
-        let statusBadge = matchedLoeIdx !== -1
-          ? '<span class="badge bg-success"><i class="fa fa-check me-1"></i>Auto-Matched</span>'
-          : '<span class="badge bg-warning text-dark"><i class="fa fa-exclamation-triangle me-1"></i>Unmapped</span>';
-
         tbodyHtml += `
-          <tr data-file-idx="${fileIdx}">
+          <tr data-file-idx="${fileIdx}" data-excel="${isExcel ? 1 : 0}" data-auto="${matchedLoeIdx !== -1 ? 1 : 0}">
             <td class="fw-semibold text-dark text-wrap" style="word-break: break-all; max-width: 250px;">${escapeHtml(filename)}</td>
             <td>${fileTypeBadge}</td>
             <td>
-              <select class="form-select form-select-sm bulk-map-select" onchange="updateBulkMapBadge(this)">
+              <select class="form-select form-select-sm bulk-map-select" onchange="this.closest('tr').dataset.auto = 0; updateBulkMapBadge(this)">
                 ${rowOptionsHtml}
               </select>
             </td>
-            <td class="text-center map-status-cell">${statusBadge}</td>
+            <td class="bulk-map-dwg"></td>
+            <td class="text-center map-status-cell"></td>
+            <td class="text-center">
+              <div class="d-flex gap-1 justify-content-center align-items-center">
+                <select class="form-select form-select-sm bulk-bom-mode d-none" style="width: auto;" title="This assembly already has a BOM">
+                  <option value="add">Add</option>
+                  <option value="replace">Replace</option>
+                </select>
+                <span class="bulk-bom-none text-muted">—</span>
+                <button type="button" class="btn btn-sm btn-outline-danger" title="Skip this file (remove it from the upload)" onclick="skipBulkUploadFile(this)"><i class="fa fa-xmark me-1"></i>Skip</button>
+              </div>
+            </td>
           </tr>
         `;
       });
 
       $('#bulkUploadMappingBody').html(tbodyHtml);
+      $('#bulkUploadMappingBody .bulk-map-select').each(function () { updateBulkMapBadge(this); });
+      updateBulkUploadCount();
+      // searchable assembly picker: type SR, assembly name or drawing number
+      if ($.fn.select2) {
+        $('#bulkUploadMappingBody .bulk-map-select').select2({
+          width: '100%',
+          dropdownParent: $('#bulkUploadMappingModal'),
+          placeholder: 'Search SR, assembly or drawing no.',
+          matcher: function (params, data) {
+            let q = String(params.term || '').toLowerCase().trim();
+            if (!q || !data.element) return data;
+            let hay = (data.text + ' ' + (data.element.dataset.dwg || '')).toLowerCase();
+            let qn = q.replace(/[^a-z0-9]/g, '');
+            return hay.includes(q) || (qn && hay.replace(/[^a-z0-9]/g, '').includes(qn)) ? data : null;
+          },
+          templateResult: function (data) {
+            if (!data.element || !data.element.dataset.dwg) return data.text;
+            return $('<span>').text(data.text).append($('<span class="text-muted small ms-2">').text(data.element.dataset.dwg));
+          }
+        });
+      }
       $('#bulkUploadMappingModal').modal('show');
       input.value = '';
     };
 
+    // Drawing number, status and BOM add / replace follow the chosen assembly
     window.updateBulkMapBadge = function (selectEl) {
-      let val = $(selectEl).val();
-      let statusCell = $(selectEl).closest('tr').find('.map-status-cell');
-      if (val === "-1") {
-        statusCell.html('<span class="badge bg-warning text-dark"><i class="fa fa-exclamation-triangle me-1"></i>Unmapped</span>');
-      } else {
-        statusCell.html('<span class="badge bg-info text-dark"><i class="fa fa-link me-1"></i>Mapped</span>');
-      }
+      let tr = selectEl.closest('tr');
+      let val = parseInt($(selectEl).val());
+      let proj = (window.projectsData || []).find(p => p.id == window._pendingBulkProjId);
+      let lr = proj && val >= 0 ? proj.loeData[val] : null;
+      $(tr).find('.bulk-map-dwg').html(lr && lr.drawingNo ? `<code class="small">${escapeHtml(lr.drawingNo)}</code>` : '<span class="text-muted">—</span>');
+      $(tr).find('.map-status-cell').html(!lr
+        ? '<span class="badge bg-warning text-dark"><i class="fa fa-exclamation-triangle me-1"></i>Unmapped</span>'
+        : tr.dataset.auto === '1'
+          ? '<span class="badge bg-success"><i class="fa fa-check me-1"></i>Auto-Matched</span>'
+          : '<span class="badge bg-info text-dark"><i class="fa fa-link me-1"></i>Mapped</span>');
+      let hasBom = !!(lr && tr.dataset.excel === '1' && (lr.bomFiles || []).length);
+      $(tr).find('.bulk-bom-mode').toggleClass('d-none', !hasBom);
+      $(tr).find('.bulk-bom-none').toggleClass('d-none', hasBom);
     };
+
+    window.skipBulkUploadFile = function (btn) {
+      $(btn).closest('tr').remove();
+      updateBulkUploadCount();
+    };
+
+    function updateBulkUploadCount() {
+      let n = $('#bulkUploadMappingBody tr[data-file-idx]').length;
+      if (!n) $('#bulkUploadMappingBody').html('<tr><td colspan="6" class="text-center text-muted py-3">All files skipped — nothing to upload.</td></tr>');
+      $('#bulkUploadCount').text(n ? `${n} file${n > 1 ? 's' : ''} to upload` : '');
+      $('#btnBulkUploadSubmit').prop('disabled', !n);
+    }
 
     window.submitBulkUploadMapping = async function () {
       $('#bulkUploadMappingModal').modal('hide');
@@ -6037,10 +6108,18 @@
         didOpen: () => { Swal.showLoading(); }
       });
 
-      let uploadStatus = { drawings: 0, boms: 0, errors: [] };
+      let uploadStatus = { drawings: 0, boms: 0, replaced: 0, errors: [] };
       let promises = [];
 
-      $('#bulkUploadMappingBody tr').each(function () {
+      let replaceRows = new Set();
+      $('#bulkUploadMappingBody tr[data-file-idx]').each(function () {
+        let loeIdx = parseInt($(this).find('.bulk-map-select').val());
+        let mode = $(this).find('.bulk-bom-mode');
+        if (loeIdx >= 0 && !mode.hasClass('d-none') && mode.val() === 'replace') replaceRows.add(loeIdx);
+      });
+      replaceRows.forEach(i => { uploadStatus.replaced += (proj.loeData[i].bomFiles || []).length; proj.loeData[i].bomFiles = []; });
+
+      $('#bulkUploadMappingBody tr[data-file-idx]').each(function () {
         let fileIdx = parseInt($(this).attr('data-file-idx'));
         let loeIdx = parseInt($(this).find('.bulk-map-select').val());
         if (loeIdx === -1) return;
@@ -6136,6 +6215,7 @@
         let msg = [];
         if (uploadStatus.drawings > 0) msg.push(`Successfully uploaded ${uploadStatus.drawings} Drawing(s).`);
         if (uploadStatus.boms > 0) msg.push(`Successfully imported ${uploadStatus.boms} BOM(s).`);
+        if (uploadStatus.replaced > 0) msg.push(`${uploadStatus.replaced} earlier BOM file(s) replaced.`);
         if (uploadStatus.errors.length > 0) msg.push(`Failed files:<br>${uploadStatus.errors.join('<br>')}`);
 
         Swal.fire({
@@ -9379,12 +9459,15 @@
       }
       const cmp = (a, b) => V.sortDir * collator.compare(String(sortVal(a)), String(sortVal(b)));
 
-      function uploadCell(it) {
+      // An assembly with subassemblies takes no BOM: the BOMs go on its subassemblies.
+      function uploadCell(it, kids) {
         const nd = it.dw.length, nb = it.bm.length;
+        const noBom = it.type === 'asm' && kids > 0 && !nb;
         return `<div class="up-sec up-sec-files">
             <div class="d-flex gap-1 mb-1">
               <button type="button" class="btn btn-sm btn-view-compact flex-fill ${nd ? 'btn-primary' : 'btn-outline-primary'}" onclick="libOpenFiles('${it.k}','dwg')"${nd ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>Drawings (${nd})</button>
-              <button type="button" class="btn btn-sm btn-view-compact flex-fill ${nb ? 'btn-success' : 'btn-outline-success'}" onclick="libOpenFiles('${it.k}','bom')"${nb ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>BOM (${nb})</button>
+              ${noBom ? '<span class="btn btn-sm btn-view-compact flex-fill btn-outline-secondary disabled" title="BOMs are uploaded on the subassemblies">BOM on subassemblies</span>'
+                : `<button type="button" class="btn btn-sm btn-view-compact flex-fill ${nb ? 'btn-success' : 'btn-outline-success'}" onclick="libOpenFiles('${it.k}','bom')"${nb ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>BOM (${nb})</button>`}
             </div>
             <div class="input-group input-group-sm">
               <input type="file" multiple class="form-control form-control-sm" id="libUp_${it.rec.id}" title="Select many files at once: Excel files are filed as BOMs, everything else as drawings">
@@ -9414,7 +9497,7 @@
             <td><code class="small">${esc(r.drawingNumber || '')}</code></td>
             <td>${fmtDay(it.last)}</td>
             <td>${status}</td>
-            <td class="upload-cell">${uploadCell(it)}</td>
+            <td class="upload-cell">${uploadCell(it, opts.kids || 0)}</td>
             <td class="text-nowrap">${acts}</td>
           </tr>`;
       }
@@ -9566,6 +9649,10 @@
       async function uploadFiles(k, files) {
         files = [...(files || [])];
         if (!files.length) return Swal.fire('No file selected', 'Choose one or more drawings / BOM files first.', 'info');
+        const rec = ownerOf(LIB, k);
+        if (k.startsWith('asm:') && rec && subsOf(LIB, rec).length && files.some(f => isExcel(f.name))) {
+          return Swal.fire('BOM goes on the subassemblies', `${rec.code} ${rec.name} has subassemblies, so its BOMs are uploaded on ${subsOf(LIB, rec).map(x => x.code).join(', ')}. Only drawings can be uploaded on this row.`, 'warning');
+        }
         Swal.fire({ title: `Uploading ${files.length} file${files.length > 1 ? 's' : ''}…`, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         const stored = [];
         try {
