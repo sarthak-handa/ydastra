@@ -47,10 +47,9 @@ This repository holds:
 | `drawings.html` | Live Assembly Drawings page dump (reference only) |
 | `activitylog.html` | Live Activity Log / Project Overview dump (reference only) |
 | `Products (12) (1).xlsx` | SAP material master export ("SAP library"), 61,639 codes |
-| `ITEM CODE DUMP 14 JULY 2026.xlsx` | Older SAP export (54,943 codes); fully contained in Products |
 | `L.O.E. 2611.xls` | Sample LOE (List of Equipment) workbook |
 | `* 2427-…xlsx`, `* 2630-…xlsx` | Ten real Design BOMs used for testing |
-| `YDLOGO.png`, `yd-favicon.png`, `yd-footer.png`, `ydbg.jpg`, `image.png` | Images |
+| `YDLOGO.png`, `yd-favicon.png`, `yd-footer.png`, `ydbg.jpg` | Images |
 
 Rule: **one runnable HTML file.** New features go into `index.html` as a view
 or module, never as a separate page.
@@ -113,6 +112,23 @@ or module, never as a separate page.
 - Script blocks: the main block (Kick-Off, Drawings, library-link module,
   YDAstra module) and a second block for the Library page logic. Library CSS
   is scoped under `.yd-lib`.
+- **Kick-Off and Drawings follow the live code** (Oct 2026 parity pass):
+  - "KICK-OFF — LIVE PARITY" (parts 1 and 2) in the main block is a port of
+    the live `kickOff.html` logic: `determineUserRole`, `getActionBtn`, the
+    generic action modal (`koOpenAction` / `koConfirmAction`), owner, SLA,
+    priority, stepper, Project Details, remarks, SO edit, Technical Scope
+    revision approval, Create Project, LOE sheet picker, week checks.
+  - "DRAWINGS — LIVE PARITY" is a port of the live `drawing.html` logic:
+    sections, sheet tabs, filters, hierarchical sort, drawings / BOM modals,
+    1-hour private window, replace / delete approval requests, Rejected list,
+    Download Updated LOE, Pending Drawings (all projects) and export.
+  - Where live calls the server, the prototype applies the same change to
+    `projectsData` (stage moves via `koMoveStage`, which records
+    `stageHistory`). When the live site changes, compare the new dumps with
+    these blocks.
+- **Sign-in is simulated:** the user menu has "View as" with mock users
+  (`KO_USERS`) whose branch names produce the live roles. The default is
+  Super Admin. Each user sees only their own buttons, exactly as on live.
 
 ### Storage (all browser-side)
 
@@ -131,10 +147,16 @@ the data.
 
 ## 5. Project data model and workflow
 
-`projectsData[]` items (main fields): `id, projNo, client, site, machine, desc,
-speed, thickness, width, soNo, isElectrical, stage, owner, pm, initiatedOn,
-timeline{stage: date}, techScopeUrl/Name, poUrl/Name, advReceiptUrl (and legacy
-advanceReceiptUrl), bypassedAdvance, remarks[], loeData[], ydcHistory[]`.
+`projectsData[]` items (main fields): `id, projNo, client, site, machine,
+machineDescription, speed, thickness, width, soNo (SG-n placeholder until a
+real SO is set), hasElectrical, stage, stageHistory[{stage, at}], createdAt,
+updatedAt, rejectionReason, paymentDecision (1 with / 2 without advance),
+noKickOff, noLOE, priority, pm / pmEmail / pmMobile (comma-joined), pmHistory[],
+notifyTeams[], notificationLog[] (simulated WhatsApp/email), advanceReceiptUrl,
+techScopeUrl, technicalScopeVersions[], pendingTechnicalScope, poUrl,
+projectRemarks[{userId, userName, text, at}], loeData[], loeSheets[],
+drawingApprovals[] (drawing / BOM requests), ydcHistory[]`. Older saved data is
+upgraded once on load (`migrateKickoffProjects`).
 
 ### Stage map (prototype `CONSTANTS.STAGE_MAP`)
 
@@ -146,12 +168,11 @@ advanceReceiptUrl), bypassedAdvance, remarks[], loeData[], ydcHistory[]`.
 | 2 | PENDING_DIRECTOR_DECISION | Director: with or without advance |
 | 3 | AWAITING_ADVANCE | Finance records the advance |
 | 4 | PENDING_PM_ASSIGNMENT | COO/VP assigns PM |
-| 5 | PENDING_KICKOFF | PM holds kickoff |
+| 5 | PENDING_KICKOFF | PM holds kickoff (live: recorded off this page; the prototype has a labelled "Mark kick-off meeting held" in Details) |
 | 6 | PENDING_DESIGN_LOE | Design uploads LOE |
 | 7 | PENDING_PLANNING_COLUMNS | Planning: dispatch week + billing value |
 | 8 | PENDING_DESIGN_RELEASE_WEEK | Design: drawing release week |
-| 8.5 | PENDING_VP_APPROVAL | VP approval (**prototype only — removed on live**) |
-| 9 | PENDING_DIRECTOR_APPROVAL | Final approval |
+| 9 | PENDING_DIRECTOR_APPROVAL | Final Approval by Director or VP; reject (message required) → back to 8 |
 | 10 | ACTIVE | Drawings upload / execution |
 | 99 | BLOCKED_NO_APPROVAL | Escalated |
 
@@ -161,15 +182,22 @@ advanceReceiptUrl), bypassedAdvance, remarks[], loeData[], ydcHistory[]`.
 scope, unitWeight, totalWeight, planDate, issuedDate, designEngineer,
 designStatus, dispatchWeek, billingValue, releaseWeek`, plus:
 
-- `drawingFiles[]` — `{ _id, originalName, fileData }` for uploaded files, or
-  a **library link** `{ _id, source: 'library', libraryDrawingId,
+- `rowId` — stable assembly id (used by drawings, approval requests).
+- `drawingFiles[]` — `{ _id, originalName, fileData, uploadedAt, uploadedBy,
+  uploadedByName, isPublic }` for uploaded files (private to the uploader for
+  one hour), or a **library link** `{ _id, source: 'library', libraryDrawingId,
   libraryComponentId, libraryUsageId, componentRef, componentName,
   originalName, linkedAt }` (see §8).
-- `subtasks[]` — BOM rows `{ component, drawingNo, qty, material, weight }`.
+- `bomFiles[]` — the BOM Excel files as uploaded (live keeps the files).
+- `subtasks[]` — components parsed from all `bomFiles`
+  `{ component, drawingNo, qty, material, weight, bomFileId }` (YDAstra reads
+  these). Hand edits in the Components window set `subtasksManual`.
 - `procurement` — YDAstra record (see §7).
 
-`mergeLoeData()` keeps `drawingFiles` / `subtasks` when an LOE is re-uploaded.
-Hierarchy helpers: `isType1Parent`, `toggleChildren`, section dividers.
+`mergeLoeData()` keeps `rowId`, `drawingFiles`, `bomFiles`, `subtasks` and
+`procurement` when an LOE is re-uploaded. Drawings hierarchy follows live:
+whole-number SR = parent, dotted = child, non-numeric SR = section bar, a
+"BO SPECIFICATION" bar before BO rows, grouped per sheet and section.
 
 ---
 
@@ -297,11 +325,10 @@ the next upload.
 
 ## 9. Prototype vs live — known gaps
 
-- Prototype still has stage 8.5 (separate VP approval); live has one final
-  approval at stage 9.
 - Prototype parses BOMs in the browser into `subtasks`; live stores BOM files
   only. YDAstra on live needs server-side BOM parsing.
-- Prototype has no roles: anyone can act as PM or SAP team.
+- Roles are simulated with "View as"; YDAstra's SAP-team steps are not yet
+  role-gated.
 - Notifications (WhatsApp / email) are not sent from the prototype.
 - PO / production order / jobwork numbers are typed by hand; the plan is to
   read them from SAP (exported report, later a direct SAP S/4HANA link) keyed
