@@ -1,7 +1,7 @@
 # YDComplan — Project Context
 
 > One file for any AI assistant or developer picking this up. It replaces the
-> older `CONTEXT.md` and `CONTEXT by claude.md`. Last updated 2026-10-15.
+> older `CONTEXT.md` and `CONTEXT by claude.md`. Last updated 2026-10-16.
 
 ---
 
@@ -34,7 +34,7 @@ This repository holds:
 | Kick-Off panel | Sales, Design, Electrical Design, Directors, Finance, COO/VP, PMs, Planning | Project lifecycle up to ACTIVE |
 | Drawings | Design team | Drawings (PDF) and BOMs (Excel) per LOE assembly / subassembly |
 | YDAstra (procurement) | Projects team (PMs) + SAP team (Yashveer, Shivam) | YF / WBS / YS codes, new-code requests, BOM to SAP, PO / Jobwork |
-| Library Drawings | Design team | Reusable assemblies, BOMs and component drawings, linked into projects |
+| Library Drawings | Design team | Reusable assemblies / subassemblies with their BOMs and drawings, linked into projects |
 
 ---
 
@@ -42,7 +42,7 @@ This repository holds:
 
 | File | What it is |
 |---|---|
-| `index.html` | The prototype (~9,900 lines): HTML + CSS + JS in one file. **The only runnable page.** |
+| `index.html` | The prototype (~9,800 lines): HTML + CSS + JS in one file. **The only runnable page.** |
 | `kickoff.html` | Live Kick-Off page dump (reference only) |
 | `drawings.html` | Live Assembly Drawings page dump (reference only) |
 | `activitylog.html` | Live Activity Log / Project Overview dump (reference only) |
@@ -110,8 +110,14 @@ or module, never as a separate page.
 | `#libraryView` | `showLibraryView()` | Library Drawings |
 
 - Script blocks: the main block (Kick-Off, Drawings, library-link module,
-  YDAstra module) and a second block for the Library page logic. Library CSS
-  is scoped under `.yd-lib`.
+  YDAstra module) and a second block for the Library page logic.
+- **One look for every page.** YDAstra and Library Drawings use the Assembly
+  Drawings page's own pieces: `page-title-bar` (red title + project
+  selector, buttons on the right), `stats-strip`, `filter-row` ("Show:"
+  filters), `table-wrap` + `table.assemblies` (dark header, column-filter
+  row, sortable headers), `parent-row` / `child-row` with `toggle-chevron`,
+  `section-divider`, and the `up-sec-files` box in the last column. New
+  pages must reuse these rather than add their own styles.
 - **Kick-Off and Drawings follow the live code** (Oct 2026 parity pass):
   - "KICK-OFF — LIVE PARITY" (parts 1 and 2) in the main block is a port of
     the live `kickOff.html` logic: `determineUserRole`, `getActionBtn`, the
@@ -137,7 +143,7 @@ or module, never as a separate page.
 | Projects (`projectsData`, incl. LOE rows, BOM rows, drawings as base64, procurement records) | IndexedDB `YDKickoffDB_v1` / store `projects` / key `ydKickoffProjects` (localStorage fallback) |
 | SAP library (Products export) | same store, key `ydSapLibrary` |
 | PM-learned code mappings | same store, key `ydCodeMemory` |
-| Library Drawings (tree, BOMs, drawings, revisions, project usages) | IndexedDB `yd-library-demo-v1`: store `state` key `library`, store `files` (one Blob per file). Name kept from the first library build so existing data survives. |
+| Library Drawings (assemblies, subassemblies, BOMs, drawings, revisions, project usages) | IndexedDB `yd-library-demo-v1`: store `state` key `library` (`schema: 2`), store `files` (one Blob per file). Name kept from the first library build so existing data survives. |
 
 Chrome/Edge give every local `file://` page the same origin, so all of this is
 one shared browser store. Firefox, another browser or another PC will not see
@@ -186,8 +192,8 @@ designStatus, dispatchWeek, billingValue, releaseWeek`, plus:
 - `drawingFiles[]` — `{ _id, originalName, fileData, uploadedAt, uploadedBy,
   uploadedByName, isPublic }` for uploaded files (private to the uploader for
   one hour), or a **library link** `{ _id, source: 'library', libraryDrawingId,
-  libraryComponentId, libraryUsageId, componentRef, componentName,
-  originalName, linkedAt }` (see §8).
+  libraryUsageId, componentRef, componentName, originalName, linkedAt }`
+  (see §8).
 - `bomFiles[]` — the BOM Excel files as uploaded (live keeps the files).
 - `subtasks[]` — components parsed from all `bomFiles`
   `{ component, drawingNo, qty, material, weight, bomFileId }` (YDAstra reads
@@ -293,28 +299,48 @@ the next upload.
 
 ## 8. Library Drawings (Design team)
 
-`#libraryView`, opened from the Kick-Off toolbar ("Library Drawings").
+`#libraryView`, opened from the Kick-Off toolbar ("Library Drawings"). Same
+layout as Assembly Drawings; kept deliberately simple.
 
-- Reusable hierarchy: **Assembly 1 → Subassembly 1.1 → Component 1.1.1**.
-  Every record has a stable ID (`asm_…`, `sub_…`, `cmp_…`, `dwg_…`, `rev_…`);
-  editing a code keeps the ID.
-- BOM import wizard: header detection, column mapping (recognises
-  `S NO.`, `PART N0.`, `DESCRIPTION`, `QTY.`, `MTL.`, `UNIT WT.`), preview,
-  then one atomic commit. A plain serial (1, 2, 3) imported into subassembly
-  1.1 becomes 1.1.1, 1.1.2…
-- Component drawings are PDFs with **revisions**; a new revision moves the
-  drawing's `currentRevisionId` pointer and keeps history.
-- Adapter: `local` (default, shared store) / `demo` (adds sample data and
-  test console) / `api` (proposed backend contract, not built).
+- Two levels: **Assembly** (SR 1, 2, …) → **Subassembly** (1.1, 1.2, …). Add
+  Assembly is top right; each assembly row has + (add subassembly), edit and
+  delete. Each record: `{ id, code, name, drawingNumber, createdAt, updatedAt }`
+  (+ `assemblyId` on a subassembly). Codes are unique among siblings.
+- **Every row has the live upload box**: "Drawings (n)" / "BOM (n)" buttons and
+  a multi-file input (files can also be dropped on it). One upload takes any
+  number of files: Excel (`.xlsx/.xls/.xlsm/.csv`) → BOM files, everything
+  else → drawings. Drawings are uploaded per assembly / subassembly, never per
+  component.
+- Drawing number and revision come from the file name
+  (`2630-TRL-01-01-00-001 Rev B.pdf` → number `2630-TRL-01-01-00-001`, rev `B`;
+  `_R2` → `R2`; no suffix → `R0`). A file whose number is already on that row
+  becomes the drawing's **next revision** (`currentRevisionId` moves, history
+  kept); the replace button in the Drawings window does the same for one file.
+- BOM window: files with in-page preview (sheet tabs), download, delete; a file
+  with the same name replaces the current one and the old one stays under
+  "Earlier versions". BOMs are not parsed in the Library.
+- State: `assemblies[], subassemblies[], boms[{ assemblyId, subassemblyId,
+  fileId, originalFilename, status: current|superseded }], drawings[{
+  assemblyId, subassemblyId, drawingNumber, currentRevisionId }],
+  revisions[{ drawingId, revisionLabel, fileId, originalFilename,
+  uploadedAt, uploadedBy }], usages[], activity[]`.
+- Delete is blocked while a drawing is linked into a project, and an
+  assembly with subassemblies must be emptied first. Older library data
+  (with components) is upgraded once on open: each component's drawings move
+  up to its subassembly / assembly.
+- `LibStore` (top of the Library script) is the only storage code, the block a
+  backend port replaces.
 
 ### Linking into projects
 
 - Drawings view → **📖 Library** button beside Upload on each row → pick the
   project item (the row itself or one of its BOM components, 1.1.1…) and a
-  library drawing (search; same drawing no. / name is flagged "Match").
+  library drawing (search by assembly, subassembly, drawing no., file name; a
+  library item with the same drawing no. / name as the row is flagged "Match").
 - Saves a `drawingFiles` entry with `source: 'library'` (no file copy) and a
   usage record in the library (`usages[]`: projectId = project no.,
-  projectComponentRef, libraryDrawingId, status).
+  projectComponentRef, libraryAssemblyId, librarySubassemblyId,
+  libraryDrawingId, status).
 - Every time the Drawings list or PDF viewer opens, the link resolves to the
   drawing's **current** revision → a new library revision appears in all
   linked projects automatically ("Library · Rev B").
