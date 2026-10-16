@@ -308,9 +308,9 @@ the next upload.
 `#libraryView`, opened from the Kick-Off toolbar ("Library Drawings"). Same
 layout as Assembly Drawings; kept deliberately simple.
 
-- Two levels: **Assembly** (SR 1, 2, …) → **Subassembly** (1.1, 1.2, …). Add
-  Assembly is top right; each assembly row has + (add subassembly), edit and
-  delete. Each record: `{ id, code, name, drawingNumber, createdAt, updatedAt }`
+- Two levels, shown as **Folder** (SR 1, 2, …) → **Subfolder** (1.1, 1.2, …);
+  the data keeps the names `assemblies` / `subassemblies`. Add Folder is top
+  right; each folder row has + (add subfolder), edit and delete. Each record: `{ id, code, name, drawingNumber, createdAt, updatedAt }`
   (+ `assemblyId` on a subassembly). Codes are unique among siblings.
 - **Every row has the live upload box**: "Drawings (n)" / "BOM (n)" buttons and
   a multi-file input (files can also be dropped on it). One upload takes any
@@ -336,6 +336,27 @@ layout as Assembly Drawings; kept deliberately simple.
   up to its subassembly / assembly.
 - `LibStore` (top of the Library script) is the only storage code, the block a
   backend port replaces.
+
+### Copy to Project
+
+Shared window `#copyToProjectModal` (`ydOpenCopyDialog`), laid out like the
+"Copy Subtasks" window: selected items on the left; on the right a searchable
+project picker, then a searchable tick list of that project's rows. Target
+rows are the rows with an upload box on the Drawings page (`ydTargetRows`):
+no section bars, no whole-number row that has sub-rows.
+
+- **Library → project:** tick folders / subfolders (a folder ticks its
+  subfolders) → **Copy to Project**. Their drawings are added as library
+  links (`ydLibLinkDrawings`, usage `mappingMethod: 'copy'`), never as file
+  copies, so replacing a drawing in the Library (new revision) replaces it in
+  every project it was copied to.
+- **Project → project:** on the Drawings page tick rows that have drawings →
+  **Copy Drawings** (Design only). A **one-time copy**: every drawing is
+  copied as a new file (`copiedFrom: { projectId, projectNo, srNo, fileId }`,
+  private to the copier for one hour like any upload). A library drawing on
+  the source row is copied as a file of its current revision, not as a link,
+  so later changes in the source project or Library do not reach the copy.
+- The same file name / library drawing already on a target row is skipped.
 
 ### Linking into projects
 

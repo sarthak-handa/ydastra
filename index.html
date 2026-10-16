@@ -1825,6 +1825,77 @@
       top: 0;
       z-index: 1;
     }
+    /* Copy drawings to a project: two panes as the Copy Subtasks window */
+    .copy-grid {
+      display: grid;
+      grid-template-columns: 1fr 34px 1.25fr;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .copy-pane {
+      background: #f6f8fc;
+      border: 1px solid #dbe3ef;
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 320px;
+      max-height: 62vh;
+      overflow: auto;
+    }
+
+    .copy-pane-title {
+      font-weight: 700;
+      color: var(--yd-primary);
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #dbe3ef;
+    }
+
+    .copy-pane li {
+      margin-bottom: 6px;
+      font-size: 0.88rem;
+    }
+
+    .copy-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6b7280;
+      font-size: 1.2rem;
+    }
+
+    .copy-target {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      background: #fff;
+      border: 1px solid #dbe3ef;
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .copy-target:hover {
+      border-color: #2f7ff0;
+    }
+
+    .copy-target input {
+      margin-top: 3px;
+      flex: none;
+    }
+
+    @media (max-width: 767px) {
+      .copy-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .copy-arrow {
+        transform: rotate(90deg);
+      }
+    }
+
     /* Library Drawings: a row's upload box while files are dragged over it */
     #libBody .upload-cell.lib-drop .up-sec-files {
       background: #e8f0fe;
@@ -1926,7 +1997,7 @@
               onclick="event.preventDefault(); showYDAstraView();">
               <i class="fa fa-cogs"></i>YDAstra
             </a>
-            <a href="#" class="btn" title="Reusable assemblies and subassemblies with their BOMs and drawings" onclick="event.preventDefault(); showLibraryView();">
+            <a href="#" class="btn" title="Library folders and subfolders with their BOMs and drawings" onclick="event.preventDefault(); showLibraryView();">
               <i class="fa fa-book"></i>Library Drawings
             </a>
             <button class="btn btn-tb-primary" id="btnNewProject" onclick="koOpenCreateModal()">
@@ -1995,6 +2066,11 @@
             <button type="button" class="btn btn-primary btn-sm fw-bold" id="btnEditExcel" onclick="if (window.openProjectDrawingsId) openExcelViewer(window.openProjectDrawingsId())"
               title="Edit the LOE values in an Excel-like editor">
               <i class="fa fa-pen-to-square me-1"></i>Edit LOE
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm fw-bold design-only" id="btnCopyDrawings"
+              onclick="dwCopyDrawings()" disabled
+              title="Tick assemblies, then copy their drawings to another project">
+              <i class="fa fa-copy me-1"></i>Copy Drawings <span class="cnt"></span>
             </button>
             <button type="button" class="btn btn-outline-danger btn-sm fw-bold" id="btnRejectedRequests"
               onclick="openRejectedRequests()"
@@ -2236,8 +2312,12 @@
             </div>
             <div class="d-flex gap-2 align-items-center">
               <button type="button" class="btn btn-primary btn-sm fw-bold" onclick="libAddAssembly()"
-                title="Add a reusable assembly; subassemblies, BOMs and drawings go on its row">
-                <i class="fa fa-plus me-1"></i>Add Assembly
+                title="Add a folder; subfolders, BOMs and drawings go on its row">
+                <i class="fa fa-plus me-1"></i>Add Folder
+              </button>
+              <button type="button" class="btn btn-success btn-sm fw-bold" id="libBtnCopy" onclick="libCopyToProject()" disabled
+                title="Tick folders / subfolders, then copy their drawings into a project (they stay linked to the Library)">
+                <i class="fa fa-copy me-1"></i>Copy to Project <span class="cnt"></span>
               </button>
               <button type="button" class="btn btn-outline-secondary btn-sm fw-bold" onclick="libShowActivity()">
                 <i class="fa fa-clock-rotate-left me-1"></i>Activity
@@ -2248,8 +2328,8 @@
             </div>
           </div>
           <div class="stats-strip">
-            <div class="stat"><span class="label">Total Assemblies</span><span class="value" id="libStatAsm"> </span></div>
-            <div class="stat"><span class="label">Subassemblies</span><span class="value" id="libStatSub"> </span></div>
+            <div class="stat"><span class="label">Total Folders</span><span class="value" id="libStatAsm"> </span></div>
+            <div class="stat"><span class="label">Subfolders</span><span class="value" id="libStatSub"> </span></div>
             <div class="stat"><span class="label">Released</span><span class="value text-success" id="libStatReleased"> </span></div>
             <div class="stat"><span class="label">Pending</span><span class="value text-warning" id="libStatPending"> </span></div>
             <div class="stat"><span class="label">Linked in Projects</span><span class="value" id="libStatLinks"> </span></div>
@@ -2267,7 +2347,7 @@
                 <div class="dropdown-menu py-1" style="min-width: 230px">
                   <label class="dropdown-item d-flex align-items-center gap-2 mb-0" style="cursor: pointer; white-space: nowrap">
                     <input class="form-check-input m-0 lib-show-filter" type="checkbox" value="all" checked />
-                    <span>All Assemblies</span>
+                    <span>All Folders</span>
                   </label>
                   <div class="dropdown-divider my-1"></div>
                   <label class="dropdown-item d-flex align-items-center gap-2 mb-0" style="cursor: pointer; white-space: nowrap">
@@ -2299,7 +2379,7 @@
                 <thead>
                   <tr>
                     <th class="sortable" data-sort-key="code" style="width: 90px">SR</th>
-                    <th class="sortable" data-sort-key="name">Assembly</th>
+                    <th class="sortable" data-sort-key="name">Folder</th>
                     <th class="sortable" data-sort-key="dwg">Drawing No</th>
                     <th class="sortable" data-sort-key="updated" style="width: 120px">Updated</th>
                     <th class="sortable" data-sort-key="status" style="width: 110px">Status</th>
@@ -2308,7 +2388,7 @@
                   </tr>
                   <tr class="column-filter-row">
                     <th><input type="text" class="form-control form-control-sm lib-col-filter" data-filter-key="code" placeholder="SR" /></th>
-                    <th><input type="text" class="form-control form-control-sm lib-col-filter" data-filter-key="name" placeholder="Assembly" /></th>
+                    <th><input type="text" class="form-control form-control-sm lib-col-filter" data-filter-key="name" placeholder="Folder" /></th>
                     <th><input type="text" class="form-control form-control-sm lib-col-filter" data-filter-key="dwg" placeholder="Drawing No" /></th>
                     <th></th>
                     <th><input type="text" class="form-control form-control-sm lib-col-filter" data-filter-key="status" placeholder="Status" /></th>
@@ -2814,6 +2894,43 @@
       <p>© <span>Copyright</span> <strong class="px-1 sitename">YOGIJI DIGI</strong></p>
     </div>
   </footer>
+
+  <!-- Copy drawings to a project (from the Library or from another project) -->
+  <div class="modal fade" id="copyToProjectModal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="copyTitle"><i class="fa fa-copy me-2"></i>Copy Drawings</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="copy-grid">
+            <div class="copy-pane">
+              <div class="copy-pane-title" id="copyLeftTitle">Selected</div>
+              <ul id="copyItems" class="mb-0 ps-3"></ul>
+            </div>
+            <div class="copy-arrow"><i class="fa fa-circle-arrow-right"></i></div>
+            <div class="copy-pane">
+              <label class="form-label small fw-bold mb-1" for="copyProject">Select Project:</label>
+              <select id="copyProject" class="form-select form-select-sm"></select>
+              <div id="copyTargetsWrap" class="d-none">
+                <hr class="my-2">
+                <label class="form-label small fw-bold mb-1" for="copySearch">Choose assembly to copy the drawings to:</label>
+                <input type="search" id="copySearch" class="form-control form-control-sm mb-2" placeholder="Search SR, assembly or drawing no.">
+                <div id="copyTargets"></div>
+              </div>
+            </div>
+          </div>
+          <div class="text-muted small mt-2" id="copyNote"></div>
+        </div>
+        <div class="modal-footer">
+          <span class="me-auto small text-muted" id="copyCount"></span>
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm fw-bold" id="copyGo" disabled><i class="fa fa-copy me-1"></i>Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="modal fade" id="drawingsModal" tabindex="-1" data-bs-focus="false">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -6419,6 +6536,7 @@
       let _bomReleased = new Map();
       let activeSheet = "";
       let libInfo = {};
+      const copySel = new Set();   // rows ticked for "Copy Drawings"
 
       // ================================================================
       // LOCAL "SERVER": data adapter + the operations live does server-side
@@ -6480,6 +6598,53 @@
       }
       const readAsDataUrl = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(file); });
       const dataUrlToBlob = u => w.dataUrlToBlob(u);   // defined once the page has loaded
+      // ---- Copy Drawings: ticked rows → rows of any project ----
+      function updateCopyButton() {
+        $('#btnCopyDrawings').prop('disabled', !copySel.size).find('.cnt').text(copySel.size ? `(${copySel.size})` : '');
+      }
+      w.dwToggleCopyPick = function (id, on) { if (on) copySel.add(id); else copySel.delete(id); updateCopyButton(); };
+      w.dwCopyDrawings = function () {
+        const src = [...copySel].map(id => rowOf(id)).filter(Boolean);
+        if (!src.length) return;
+        w.ydOpenCopyDialog({
+          title: 'Copy Drawings to Project',
+          leftTitle: 'Selected Assemblies',
+          items: src.map(r => { const n = (r.lr.drawingFiles || []).filter(visibleFile).length; return `${r.lr.srNo} — ${r.lr.assemblyName || ''} (${n} drawing${n === 1 ? '' : 's'})`; }),
+          exclude: new Set(src.map(r => r.proj.id + ':' + r.idx)),
+          note: 'One-time copy: the drawings are copied as files and do not change when the source project changes. A copy is private to you for one hour, like a new upload.',
+          onCopy: async (proj, idxs) => {
+            let added = 0, skipped = 0;
+            for (const idx of idxs) {
+              const lr = proj.loeData[idx];
+              lr.drawingFiles = lr.drawingFiles || [];
+              for (const r of src) {
+                // one-time copy: every drawing becomes a plain file on the target,
+                // a library drawing as its current revision (no link back)
+                for (const f of (r.lr.drawingFiles || []).filter(visibleFile)) {
+                  let name = f.originalName, data = f.fileData;
+                  if (isLib(f)) {
+                    try {
+                      const info = (await w.ydLibDescribe([f]))[f._id];
+                      if (info && info.ok) name = info.revision.originalFilename || name;
+                      data = await readAsDataUrl(await w.ydLibBlobFor(f));
+                    } catch (e) { data = null; }
+                  }
+                  if (!data) { skipped++; continue; }
+                  if (lr.drawingFiles.some(x => !isLib(x) && x.originalName === name)) { skipped++; continue; }
+                  const n = w.dwNewDrawingFile(name, data);
+                  n.copiedFrom = { projectId: r.proj.id, projectNo: r.proj.projNo || '', srNo: r.lr.srNo || '', fileId: f._id };
+                  lr.drawingFiles.push(n);
+                  added++;
+                }
+              }
+            }
+            await save();
+            copySel.clear();
+            updateCopyButton();
+            return { added, skipped };
+          }
+        });
+      };
       w.dwNewDrawingFile = function (name, dataUrl) {
         const u = me();
         return { _id: uid('dwg'), originalName: name, fileData: dataUrl, uploadedAt: new Date().toISOString(), uploadedBy: u._id, uploadedByName: u.name, isPublic: false };
@@ -6749,7 +6914,9 @@
         if (changed) await save();
         loadPendingApprovalTickets();
         updatePendingApprovalButton();
+        [...copySel].forEach(id => { if (!allAssemblies.some(a => a._id === id)) copySel.delete(id); });
         renderAssemblies();
+        updateCopyButton();
         if (_drawingsModalAssemblyId && document.getElementById("drawingsModal")?.classList.contains("show")) renderDrawingsModal();
         if (_bomModalAssemblyId && document.getElementById("asmBomModal")?.classList.contains("show")) renderBomModal();
       }
@@ -6804,11 +6971,13 @@
                 <button type="button" class="btn btn-primary" onclick="uploadAssemblyFiles('${a._id}')"><i class="fa fa-upload me-1"></i>Upload</button>
                 <button type="button" class="btn btn-outline-info" onclick="ydFetchFromLibrary('${a.projId}', ${a.loeIdx})" title="Fetch from Library"><i class="fa fa-book"></i></button>
               </div>`;
+        const pick = !isAggRow && drawingCount && !allPendingMode
+          ? `<input type="checkbox" class="form-check-input me-2 design-only dw-copy-pick" title="Select to copy its drawings to another project"${copySel.has(a._id) ? " checked" : ""} onchange="dwToggleCopyPick('${a._id}', this.checked)">` : "";
         const t = pendingTicketsFor(a._id);
         const chip = t.length ? `<span class="badge bg-warning text-dark ms-2 pending-approval-chip" role="button" tabindex="0" data-assembly-id="${escapeHtml(a._id)}"><i class="fa fa-clock me-1"></i>${t.every(x => x.status === "pm-review") ? "Awaiting PM impact" : "Pending approval"}${t.length > 1 ? ` (${t.length})` : ""}</span>` : "";
         return `<tr class="${rowClasses}" data-assembly-id="${a._id}">
             ${allPendingMode ? `<td><span class="fw-semibold">${escapeHtml(a.projectNo || "")}</span></td>` : ""}
-            <td>${chevron}${escapeHtml(a.srNo || "")}</td>
+            <td class="text-nowrap">${pick}${chevron}${escapeHtml(a.srNo || "")}</td>
             <td><div class="fw-semibold">${escapeHtml(a.assemblyName || "")}${chip}</div><div class="text-muted small">${escapeHtml(a.section || "")}</div></td>
             <td><code class="small">${escapeHtml(a.drawingDocNo || "")}</code></td>
             <td>${escapeHtml(a.qty || "")}</td>
@@ -7744,6 +7913,43 @@
 
       const norm = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+      // Links library drawings into a project row (no file copy) and records the
+      // usages in the Library. The caller saves projectsData.
+      w.ydLibLinkDrawings = async function (proj, loeIdx, drawingIds) {
+        const lr = proj.loeData[loeIdx];
+        lr.drawingFiles = lr.drawingFiles || [];
+        const ref = String(lr.srNo || '').trim(), name = lr.assemblyName || '';
+        const ids = [...new Set(drawingIds)];
+        const want = ids.filter(id => !lr.drawingFiles.some(f => isLib(f) && f.libraryDrawingId === id && f.componentRef === ref));
+        if (!want.length) return { added: 0, skipped: ids.length };
+        const by = w.koActingUser ? w.koActingUser().name : 'YD Projects';
+        const made = await libUpdate(st => {
+          const t = new Date().toISOString(), out = [];
+          want.forEach(id => {
+            const d = (st.drawings || []).find(x => x.id === id && x.status !== 'archived');
+            if (!d) return;
+            const rev = (st.revisions || []).find(r => r.id === d.currentRevisionId);
+            const u = {
+              id: 'use_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)),
+              projectId: String(proj.projNo || proj.id), projectAssemblyId: String(proj.id), projectSubassemblyId: ref, projectComponentId: null,
+              projectComponentRef: ref, projectComponentName: name,
+              libraryAssemblyId: d.assemblyId, librarySubassemblyId: d.subassemblyId || null, libraryDrawingId: d.id,
+              mappingMethod: 'copy', linkedAt: t, linkedBy: by, status: 'active'
+            };
+            (st.usages = st.usages || []).push(u);
+            out.push({ d: d, rev: rev, u: u });
+          });
+          if (out.length) (st.activity = st.activity || []).unshift({ id: 'act_' + Date.now(), at: t, by: by, detail: `Copied ${out.length} drawing(s) to project ${proj.projNo || proj.id}, SR ${ref} ${name}` });
+          return out;
+        });
+        made.forEach(({ d, rev, u }) => lr.drawingFiles.push({
+          _id: 'lib_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+          source: 'library', libraryDrawingId: d.id, libraryUsageId: u.id, componentRef: ref, componentName: name,
+          originalName: (rev && rev.originalFilename) || (d.drawingNumber || 'drawing') + '.pdf', linkedAt: new Date().toISOString()
+        }));
+        return { added: made.length, skipped: ids.length - made.length };
+      };
+
       w.ydFetchFromLibrary = async function (projId, loeIdx) {
         const proj = (w.projectsData || []).find(p => p.id == projId);
         const lr = proj && proj.loeData && proj.loeData[loeIdx];
@@ -7752,7 +7958,7 @@
         try { s = await libGet('state', 'library'); } catch (e) { return Swal.fire('Library unavailable', 'Could not read the Library storage in this browser: ' + (e.message || e), 'error'); }
         const rows = s ? libraryRows(s) : [];
         if (!rows.length) {
-          return Swal.fire({ icon: 'info', title: 'No library drawings yet', html: `Add assemblies and upload their drawings on the <a href="#" onclick="Swal.close(); showLibraryView(); return false;">Library Drawings</a> page first.` });
+          return Swal.fire({ icon: 'info', title: 'No library drawings yet', html: `Add folders and upload their drawings on the <a href="#" onclick="Swal.close(); showLibraryView(); return false;">Library Drawings</a> page first.` });
         }
 
         const sr = String(lr.srNo || '').trim();
@@ -7763,11 +7969,11 @@
           <div class="text-start">
             <label class="form-label small fw-bold mb-1">Link to project item</label>
             <select id="ydLibTarget" class="form-select form-select-sm mb-2">${targets.map((t, i) => `<option value="${i}">${escapeHtml(t.label)}</option>`).join('')}</select>
-            <input id="ydLibSearch" type="search" class="form-control form-control-sm mb-2" placeholder="Search assembly, subassembly, drawing no., file name…">
+            <input id="ydLibSearch" type="search" class="form-control form-control-sm mb-2" placeholder="Search folder, subfolder, drawing no., file name…">
             <div style="max-height: 52vh; overflow: auto;" class="border rounded">
               <table class="table table-sm table-hover mb-0 small align-middle">
                 <thead class="table-light" style="position: sticky; top: 0;"><tr>
-                  <th></th><th>Assembly</th><th>Subassembly</th><th>Drawing No.</th><th>File</th><th>Rev</th>
+                  <th></th><th>Folder</th><th>Subfolder</th><th>Drawing No.</th><th>File</th><th>Rev</th>
                 </tr></thead>
                 <tbody id="ydLibRows"></tbody>
               </table>
@@ -7852,6 +8058,97 @@
         Swal.fire({ icon: 'success', title: 'Linked to Library', text: `${target.ref} now shows library drawing ${row.drawing.drawingNumber || row.owner.code} (Rev ${row.rev.revisionLabel}). Future library revisions appear here automatically.`, timer: 2600, showConfirmButton: false });
       };
     })(window);
+    // ================================================================
+    // COPY TO PROJECT window — shared by the Library page and the Drawings
+    // page. The caller gives the selected items and does the copy in
+    // onCopy(proj, loeIdxs) → { added, skipped }. Target rows are the ones
+    // with an upload box on the Drawings page: not section bars, and not a
+    // whole-number row that has sub-assemblies under it.
+    // ================================================================
+    (function (w) {
+      'use strict';
+      let ctx = null;
+      const esc = v => w.escapeHtml ? w.escapeHtml(v) : String(v == null ? '' : v);
+
+      w.ydTargetRows = function (proj) {
+        const loe = proj.loeData || [], parents = new Set();
+        let last = {};
+        loe.forEach((lr, idx) => {
+          const sr = String(lr.srNo || '').trim(), sheet = lr.sheetName || '';
+          if (w.isDividerRow && w.isDividerRow(lr)) { last = {}; return; }
+          if (/^\d+$/.test(sr)) last[sheet] = { sr: sr, idx: idx };
+          else if (sr.includes('.') && last[sheet] && last[sheet].sr === sr.split('.')[0]) parents.add(last[sheet].idx);
+        });
+        return loe.map((lr, idx) => ({ idx: idx, lr: lr })).filter(x => !(w.isDividerRow && w.isDividerRow(x.lr)) && !parents.has(x.idx));
+      };
+
+      function drawTargets() {
+        const proj = (w.projectsData || []).find(p => p.id == $('#copyProject').val());
+        $('#copyTargetsWrap').toggleClass('d-none', !proj);
+        if (!proj) { $('#copyTargets').html(''); updateCount(); return; }
+        const q = String($('#copySearch').val() || '').toLowerCase().trim(), qn = q.replace(/[^a-z0-9]/g, '');
+        const picked = new Set($('#copyTargets input:checked').map(function () { return this.value; }).get());
+        const rows = w.ydTargetRows(proj).filter(x => !(ctx.exclude && ctx.exclude.has(proj.id + ':' + x.idx))).filter(x => {
+          if (!q) return true;
+          const hay = [x.lr.srNo, x.lr.assemblyName, x.lr.drawingNo, x.lr.section].join(' ').toLowerCase();
+          return hay.includes(q) || (qn && hay.replace(/[^a-z0-9]/g, '').includes(qn));
+        });
+        $('#copyTargets').html(rows.length ? rows.map(x => `
+            <label class="copy-target">
+              <input type="checkbox" class="form-check-input" value="${x.idx}"${picked.has(String(x.idx)) ? ' checked' : ''}>
+              <span><b>${esc(x.lr.srNo)}</b> — ${esc(x.lr.assemblyName || '')}${x.lr.drawingNo ? ` <code class="small ms-1">${esc(x.lr.drawingNo)}</code>` : ''}
+                ${(x.lr.drawingFiles || []).length ? `<span class="badge badge-soft-muted ms-1">${x.lr.drawingFiles.length} drawing${x.lr.drawingFiles.length === 1 ? '' : 's'}</span>` : ''}</span>
+            </label>`).join('') : '<div class="text-muted small">No assembly matches.</div>');
+        updateCount();
+      }
+      function updateCount() {
+        const n = $('#copyTargets input:checked').length;
+        $('#copyCount').text(n ? `Copy to ${n} assembl${n === 1 ? 'y' : 'ies'}` : '');
+        $('#copyGo').prop('disabled', !n);
+      }
+
+      w.ydOpenCopyDialog = function (opts) {
+        ctx = opts;
+        $('#copyTitle').html(`<i class="fa fa-copy me-2"></i>${esc(opts.title || 'Copy Drawings')}`);
+        $('#copyLeftTitle').text(opts.leftTitle || 'Selected');
+        $('#copyItems').html(opts.items.map(t => `<li>${esc(t)}</li>`).join(''));
+        $('#copyNote').text(opts.note || '');
+        const projs = (w.projectsData || []).filter(p => p.stage >= 7 && (p.loeData || []).length);
+        const $p = $('#copyProject');
+        if ($p.hasClass('select2-hidden-accessible')) $p.select2('destroy');
+        $p.html('<option value="">-- Select Project --</option>' + projs.map(p => `<option value="${esc(p.id)}">${esc((p.projNo || 'TBD') + ' - ' + (p.client || '') + (p.machine ? ' · ' + p.machine : ''))}</option>`).join(''));
+        if ($.fn.select2) $p.select2({ width: '100%', dropdownParent: $('#copyToProjectModal'), placeholder: 'Search project no., client or machine' });
+        $('#copySearch').val('');
+        $('#copyTargets').html('');
+        drawTargets();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('copyToProjectModal')).show();
+      };
+
+      $(function () {
+        $('#copyProject').on('change', () => { $('#copyTargets').html(''); drawTargets(); });
+        $('#copySearch').on('input', drawTargets);
+        $(document).on('change', '#copyTargets input', updateCount);
+        $('#copyGo').on('click', async function () {
+          const proj = (w.projectsData || []).find(p => p.id == $('#copyProject').val());
+          const idxs = $('#copyTargets input:checked').map(function () { return +this.value; }).get();
+          if (!proj || !idxs.length || !ctx) return;
+          $(this).prop('disabled', true);
+          try {
+            const r = await ctx.onCopy(proj, idxs);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('copyToProjectModal')).hide();
+            if (typeof w.loadProjectsData === 'function') w.loadProjectsData();
+            Swal.fire({
+              icon: r.added ? 'success' : 'info', title: r.added ? 'Drawings copied' : 'Nothing new to copy',
+              html: `${r.added} drawing${r.added === 1 ? '' : 's'} copied to ${idxs.length} assembl${idxs.length === 1 ? 'y' : 'ies'} of project <b>${esc(proj.projNo || '')}</b>.`
+                + (r.skipped ? `<br><span class="text-muted small">${r.skipped} already there — skipped.</span>` : '')
+            });
+          } catch (e) {
+            Swal.fire('Could not copy', e.message || String(e), 'error');
+          } finally { updateCount(); }
+        });
+      });
+    })(window);
+
     // ================================================================
     // YDASTRA — PROCUREMENT MODULE (Projects team, after BOM upload)
     // ----------------------------------------------------------------
@@ -9421,7 +9718,7 @@
       // ================================================================
       // PAGE STATE + TABLE
       // ================================================================
-      const V = { open: new Set(), q: '', show: ['all'], col: {}, sortKey: 'code', sortDir: 1 };
+      const V = { open: new Set(), q: '', show: ['all'], col: {}, sortKey: 'code', sortDir: 1, sel: new Set() };
 
       function itemInfo(s, rec, type, asm) {
         const k = (type === 'sub' ? 'sub:' : 'asm:') + rec.id;
@@ -9466,7 +9763,7 @@
         return `<div class="up-sec up-sec-files">
             <div class="d-flex gap-1 mb-1">
               <button type="button" class="btn btn-sm btn-view-compact flex-fill ${nd ? 'btn-primary' : 'btn-outline-primary'}" onclick="libOpenFiles('${it.k}','dwg')"${nd ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>Drawings (${nd})</button>
-              ${noBom ? '<span class="btn btn-sm btn-view-compact flex-fill btn-outline-secondary disabled" title="BOMs are uploaded on the subassemblies">BOM on subassemblies</span>'
+              ${noBom ? '<span class="btn btn-sm btn-view-compact flex-fill btn-outline-secondary disabled" title="BOMs are uploaded on the subfolders">BOM on subfolders</span>'
                 : `<button type="button" class="btn btn-sm btn-view-compact flex-fill ${nb ? 'btn-success' : 'btn-outline-success'}" onclick="libOpenFiles('${it.k}','bom')"${nb ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>BOM (${nb})</button>`}
             </div>
             <div class="input-group input-group-sm">
@@ -9483,16 +9780,17 @@
           ? `<span class="toggle-chevron${opts.hasKids ? '' : ' invisible'}${opts.open ? ' open' : ''}" onclick="event.stopPropagation(); libToggle('${r.id}')"><i class="fa fa-chevron-right"></i></span>`
           : '';
         const sub = it.type === 'asm'
-          ? (opts.kids ? `${opts.kids} subassembl${opts.kids > 1 ? 'ies' : 'y'}` : 'Assembly')
-          : 'Subassembly of ' + esc(it.asm.code + ' ' + it.asm.name);
+          ? (opts.kids ? `${opts.kids} subfolder${opts.kids > 1 ? 's' : ''}` : 'Folder')
+          : 'Subfolder of ' + esc(it.asm.code + ' ' + it.asm.name);
         const status = it.dw.length ? '<span class="badge bg-success"><i class="fa fa-circle-check me-1"></i>Released</span>' : '<span class="badge badge-soft-muted">Pending</span>';
         const acts = `<div class="btn-group btn-group-sm">
-            ${it.type === 'asm' ? `<button type="button" class="btn btn-outline-primary" title="Add subassembly" onclick="libAddSub('${r.id}')"><i class="fa fa-plus"></i></button>` : ''}
+            ${it.type === 'asm' ? `<button type="button" class="btn btn-outline-primary" title="Add subfolder" onclick="libAddSub('${r.id}')"><i class="fa fa-plus"></i></button>` : ''}
             <button type="button" class="btn btn-outline-secondary" title="Edit" onclick="libEdit('${it.k}')"><i class="fa fa-pen"></i></button>
             <button type="button" class="btn btn-outline-danger" title="Delete" onclick="libDelete('${it.k}')"><i class="fa fa-trash"></i></button>
           </div>`;
+        const pick = `<input type="checkbox" class="form-check-input me-2 lib-pick" title="Select to copy its drawings to a project"${V.sel.has(it.k) ? ' checked' : ''} onchange="libTogglePick('${it.k}', this.checked)">`;
         return `<tr class="${cls}" data-lib-key="${it.k}">
-            <td>${chev}${esc(r.code)}</td>
+            <td class="text-nowrap">${pick}${chev}${esc(r.code)}</td>
             <td><div class="fw-semibold">${esc(r.name)}</div><div class="text-muted small">${sub}</div></td>
             <td><code class="small">${esc(r.drawingNumber || '')}</code></td>
             <td>${fmtDay(it.last)}</td>
@@ -9512,7 +9810,7 @@
         $('#libStatReleased').text(all.filter(x => x.dw.length).length);
         $('#libStatPending').text(all.filter(x => !x.dw.length).length);
         $('#libStatLinks').text(s.usages.filter(u => u.status === 'active').length);
-        $('#libMeta').text(`${s.assemblies.length} assemblies · ${s.drawings.filter(d => d.status !== 'archived').length} drawings · ${s.boms.filter(b => b.status === 'current').length} BOM files`);
+        $('#libMeta').text(`${s.assemblies.length} folders · ${s.drawings.filter(d => d.status !== 'archived').length} drawings · ${s.boms.filter(b => b.status === 'current').length} BOM files`);
 
         const f = filtering();
         const out = [];
@@ -9530,7 +9828,9 @@
         $('#libTableWrap').removeClass('d-none');
         $('#libBody').html(out.length ? out.join('') : `<tr><td colspan="7" class="text-center text-muted py-4">${s.assemblies.length
           ? 'Nothing matches the current filter.'
-          : 'The library is empty. Click <b>Add Assembly</b> to start, then upload its BOM and drawings on the row.'}</td></tr>`);
+          : 'The library is empty. Click <b>Add Folder</b> to start, then upload its BOM and drawings on the row.'}</td></tr>`);
+        [...V.sel].forEach(k => { if (!ownerOf(s, k)) V.sel.delete(k); });
+        $('#libBtnCopy').prop('disabled', !V.sel.size).find('.cnt').text(V.sel.size ? `(${V.sel.size})` : '');
         document.querySelectorAll('#libraryView th.sortable').forEach(th => {
           th.classList.toggle('sort-asc', th.dataset.sortKey === V.sortKey && V.sortDir === 1);
           th.classList.toggle('sort-desc', th.dataset.sortKey === V.sortKey && V.sortDir === -1);
@@ -9575,13 +9875,13 @@
       w.libAddAssembly = async function () {
         await reload();
         const next = Math.max(0, ...LIB.assemblies.map(a => parseInt(a.code, 10)).filter(n => !isNaN(n))) + 1;
-        const v = await itemForm('Add Assembly', { code: String(next), name: '', drawingNumber: '' });
+        const v = await itemForm('Add Folder', { code: String(next), name: '', drawingNumber: '' });
         if (!v) return;
         try {
           await commit(s => {
-            if (s.assemblies.some(a => key(a.code) === key(v.code))) throw new Error(`Assembly ${v.code} already exists.`);
+            if (s.assemblies.some(a => key(a.code) === key(v.code))) throw new Error(`Folder ${v.code} already exists.`);
             s.assemblies.push({ id: uid('asm'), ...v, createdAt: nowIso(), updatedAt: nowIso() });
-          }, `Added assembly ${v.code} ${v.name}`);
+          }, `Added folder ${v.code} ${v.name}`);
           render();
         } catch (e) { fail(e); }
       };
@@ -9589,13 +9889,13 @@
       w.libAddSub = async function (asmId) {
         await reload();
         const a = LIB.assemblies.find(x => x.id === asmId); if (!a) return;
-        const v = await itemForm(`Add Subassembly to ${a.code}`, { code: `${a.code}.${subsOf(LIB, a).length + 1}`, name: '', drawingNumber: '' });
+        const v = await itemForm(`Add Subfolder to ${a.code}`, { code: `${a.code}.${subsOf(LIB, a).length + 1}`, name: '', drawingNumber: '' });
         if (!v) return;
         try {
           await commit(s => {
-            if (s.subassemblies.some(x => x.assemblyId === asmId && key(x.code) === key(v.code))) throw new Error(`${a.code} already has subassembly ${v.code}.`);
+            if (s.subassemblies.some(x => x.assemblyId === asmId && key(x.code) === key(v.code))) throw new Error(`${a.code} already has subfolder ${v.code}.`);
             s.subassemblies.push({ id: uid('sub'), assemblyId: asmId, ...v, createdAt: nowIso(), updatedAt: nowIso() });
-          }, `Added subassembly ${v.code} ${v.name} under ${a.code}`);
+          }, `Added subfolder ${v.code} ${v.name} under ${a.code}`);
           V.open.add(asmId);
           render();
         } catch (e) { fail(e); }
@@ -9605,7 +9905,7 @@
         await reload();
         const rec = ownerOf(LIB, k); if (!rec) return;
         const isSub = k.startsWith('sub:');
-        const v = await itemForm(`Edit ${isSub ? 'Subassembly' : 'Assembly'} ${rec.code}`, rec);
+        const v = await itemForm(`Edit ${isSub ? 'Subfolder' : 'Folder'} ${rec.code}`, rec);
         if (!v) return;
         try {
           await commit(s => {
@@ -9613,7 +9913,7 @@
             const sibs = isSub ? s.subassemblies.filter(x => x.assemblyId === r.assemblyId) : s.assemblies;
             if (sibs.some(x => x.id !== r.id && key(x.code) === key(v.code))) throw new Error(`Code ${v.code} is already used.`);
             Object.assign(r, v, { updatedAt: nowIso() });
-          }, `Edited ${isSub ? 'subassembly' : 'assembly'} ${v.code} ${v.name}`);
+          }, `Edited ${isSub ? 'subfolder' : 'folder'} ${v.code} ${v.name}`);
           render();
         } catch (e) { fail(e); }
       };
@@ -9622,7 +9922,7 @@
         await reload();
         const rec = ownerOf(LIB, k); if (!rec) return;
         const isSub = k.startsWith('sub:');
-        if (!isSub && subsOf(LIB, rec).length) return Swal.fire('Has subassemblies', `Delete the subassemblies of ${rec.code} first.`, 'warning');
+        if (!isSub && subsOf(LIB, rec).length) return Swal.fire('Has subfolders', `Delete the subfolders of ${rec.code} first.`, 'warning');
         const dw = drawingsOf(LIB, k), bm = LIB.boms.filter(b => keyOfBom(b) === k);
         const linked = dw.filter(d => usagesOf(LIB, d).length);
         if (linked.length) return Swal.fire('Used in projects', `${linked.length} drawing(s) of ${rec.code} are linked into project drawings. Unlink them on the project's Drawings page first.`, 'warning');
@@ -9637,7 +9937,7 @@
             s.boms = s.boms.filter(b => keyOfBom(b) !== k);
             if (isSub) s.subassemblies = s.subassemblies.filter(x => x.id !== rec.id); else s.assemblies = s.assemblies.filter(x => x.id !== rec.id);
             return fids;
-          }, `Deleted ${isSub ? 'subassembly' : 'assembly'} ${rec.code} ${rec.name}`);
+          }, `Deleted ${isSub ? 'subfolder' : 'folder'} ${rec.code} ${rec.name}`);
           await Promise.all(fileIds.map(id => LibStore.delFile(id).catch(() => { })));
           render();
         } catch (e) { fail(e); }
@@ -9651,14 +9951,14 @@
         if (!files.length) return Swal.fire('No file selected', 'Choose one or more drawings / BOM files first.', 'info');
         const rec = ownerOf(LIB, k);
         if (k.startsWith('asm:') && rec && subsOf(LIB, rec).length && files.some(f => isExcel(f.name))) {
-          return Swal.fire('BOM goes on the subassemblies', `${rec.code} ${rec.name} has subassemblies, so its BOMs are uploaded on ${subsOf(LIB, rec).map(x => x.code).join(', ')}. Only drawings can be uploaded on this row.`, 'warning');
+          return Swal.fire('BOM goes on the subfolders', `${rec.code} ${rec.name} has subfolders, so its BOMs are uploaded on ${subsOf(LIB, rec).map(x => x.code).join(', ')}. Only drawings can be uploaded on this row.`, 'warning');
         }
         Swal.fire({ title: `Uploading ${files.length} file${files.length > 1 ? 's' : ''}…`, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         const stored = [];
         try {
           for (const f of files) { const id = uid('file'); await LibStore.putFile(id, new Blob([await f.arrayBuffer()], { type: f.type || 'application/octet-stream' })); stored.push({ id, f }); }
           const sum = await commit(s => {
-            const owner = ownerOf(s, k); if (!owner) throw new Error('This assembly no longer exists.');
+            const owner = ownerOf(s, k); if (!owner) throw new Error('This folder no longer exists.');
             const asmId = k.startsWith('sub:') ? owner.assemblyId : owner.id, subId = k.startsWith('sub:') ? owner.id : null;
             const t = nowIso(), by = userName(), out = { drawings: 0, revisions: 0, boms: 0 };
             stored.forEach(({ id, f }) => {
@@ -9859,6 +10159,38 @@
             document.getElementById('libBomSheet').innerHTML = sheet(+btn.dataset.libSheet);
           }));
         } catch (e) { host.innerHTML = `<div class="text-danger small">Could not read this file: ${esc(e.message || e)}</div>`; }
+      };
+
+      // ================================================================
+      // COPY TO PROJECT — the drawings of the ticked folders / subfolders are
+      // linked (not duplicated) into the chosen project rows, so a new
+      // revision here replaces them in every project automatically.
+      // ================================================================
+      w.libTogglePick = function (k, on) {
+        const keys = [k];
+        if (k.startsWith('asm:')) { const a = ownerOf(LIB, k); if (a) subsOf(LIB, a).forEach(x => keys.push('sub:' + x.id)); }
+        keys.forEach(x => { if (on) V.sel.add(x); else V.sel.delete(x); });
+        render();
+      };
+
+      w.libCopyToProject = function () {
+        const items = [...V.sel].map(k => ({ k, r: ownerOf(LIB, k), d: drawingsOf(LIB, k).filter(d => revOf(LIB, d)) })).filter(x => x.r)
+          .sort((a, b) => collator.compare(a.r.code, b.r.code));
+        const ids = items.flatMap(x => x.d.map(d => d.id));
+        if (!ids.length) return Swal.fire('No drawings to copy', 'The ticked folders have no drawings uploaded yet.', 'info');
+        w.ydOpenCopyDialog({
+          title: 'Copy Library Drawings to Project',
+          leftTitle: 'Selected Folders',
+          items: items.map(x => `${x.r.code} — ${x.r.name} (${x.d.length} drawing${x.d.length === 1 ? '' : 's'})`),
+          note: 'Copied library drawings stay linked: when a drawing is replaced here (new revision), every project it was copied to shows the new one.',
+          onCopy: async (proj, idxs) => {
+            let added = 0, skipped = 0;
+            for (const idx of idxs) { const r = await w.ydLibLinkDrawings(proj, idx, ids); added += r.added; skipped += r.skipped; }
+            await w.saveProjects();
+            await reload(); V.sel.clear(); render();
+            return { added, skipped };
+          }
+        });
       };
 
       // ================================================================
