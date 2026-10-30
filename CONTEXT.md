@@ -46,7 +46,7 @@ This repository holds:
 | `kickoff.html` | Live Kick-Off page dump (reference only) |
 | `drawings.html` | Live Assembly Drawings page dump (reference only) |
 | `activitylog.html` | Live Activity Log / Project Overview dump (reference only) |
-| `handoff/ydastra.html` | **YDAstra for the live site**, one self-contained page for the website developer (see §7a). Generated from the YDAstra module of `index.html`; do not edit by hand — change `index.html`, then rebuild it. |
+| `handoff/SAP-code-accuracy-guide.md` | Plain-English guide (no code) for the website developer and his Claude: BOM row → YS / FS / YF / WBS rules, measured results, test examples and how to raise accuracy against SAP BOMs. Hand-written; update it when the code rules below change. |
 | `Products (12) (1).xlsx` | SAP material master export ("SAP library"), 61,639 codes |
 | `L.O.E. 2611.xls` | Sample LOE (List of Equipment) workbook |
 | `* 2427-…xlsx`, `* 2630-…xlsx` | Ten real Design BOMs used for testing |
@@ -54,7 +54,7 @@ This repository holds:
 
 Rule: **one runnable HTML file.** New features go into `index.html` as a view
 or module, never as a separate page. The only exception is `handoff/`, which
-holds files built from `index.html` for the live-site developer.
+holds the guide for the live-site developer.
 
 ---
 
@@ -291,25 +291,16 @@ with SR …"); a PM-typed code for a non-drawing line is remembered
 after sending, a banner offers to re-open Stage 1. All storage calls go through
 `YDStore` — the block a backend port replaces.
 
-### 7a. Live handoff — `handoff/ydastra.html`
+### 7a. Developer handoff — `handoff/SAP-code-accuracy-guide.md`
 
-The YDAstra layer packaged for the live site: the live `drawing.html` shell
-(head, header, attendance modal, `assets/…` scripts, `config.js` API_URL,
-login token) + YDAstra views, CSS and module from `index.html` + a **live
-connector** (`window.YDLive`).
-
-- Reads with existing routes: `kickoffRoutes/activeProjects`,
-  `projectAssemblies/:id`, `downloadAssemblyDrawing?key=` (BOMs are
-  parsed in the browser and cached per `fileKey`).
-- Saves through new routes the developer adds: `GET /ydastra/projects/:id`
-  (procurement per assembly, history, permissions), `PUT
-  /ydastra/assemblies/:assemblyId`, `GET|PUT /ydastra/settings/sapLibrary |
-  codeMemory`. Full contract, Mongo collections and an Express sketch are
-  in the comment at the top of the file.
-- Until those exist it keeps the data in the browser (IndexedDB
-  `ydastra-local`) and shows a yellow "Not saved to the server yet" banner.
-- Roles come from the backend `permissions` flags (missing = allowed).
-- Opened as `ydastra.html?project=<_id>`.
+The live developer built his own YDAstra code, so the handoff is one
+plain-English guide (no code) on making the BOM → SAP code conversion
+accurate: rules in order, BOM reading pitfalls (columns found by header —
+some BOMs insert YSCODE / YSDESCRIPTION columns, e.g. 2427-RFC), measured
+results, real test rows, and the method for measuring against SAP BOMs.
+The earlier generated `ydastra.html` / `ydastra-codes.js` were removed
+(2026-10-30). Note: `index.html` itself still reads BOM columns by
+position (B, D, E, F, H/G).
 
 ### SAP code rules (verified against the Products export)
 
@@ -436,7 +427,7 @@ no section bars, no whole-number row that has sub-rows.
 ## 10. Rules for AI assistants
 
 1. **One runnable file.** Keep everything in `index.html`; no new HTML pages
-   (except generated handoff files in `handoff/`).
+   (except the developer guide in `handoff/`).
    `kickoff.html`, `drawings.html`, `activitylog.html` are references — never
    edit them, only read them.
 2. **Match the live site** for Kick-Off and Drawings UI/behaviour; the three
