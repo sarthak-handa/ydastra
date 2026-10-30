@@ -46,13 +46,15 @@ This repository holds:
 | `kickoff.html` | Live Kick-Off page dump (reference only) |
 | `drawings.html` | Live Assembly Drawings page dump (reference only) |
 | `activitylog.html` | Live Activity Log / Project Overview dump (reference only) |
+| `handoff/ydastra.html` | **YDAstra for the live site**, one self-contained page for the website developer (see §7a). Generated from the YDAstra module of `index.html`; do not edit by hand — change `index.html`, then rebuild it. |
 | `Products (12) (1).xlsx` | SAP material master export ("SAP library"), 61,639 codes |
 | `L.O.E. 2611.xls` | Sample LOE (List of Equipment) workbook |
 | `* 2427-…xlsx`, `* 2630-…xlsx` | Ten real Design BOMs used for testing |
 | `YDLOGO.png`, `yd-favicon.png`, `yd-footer.png`, `ydbg.jpg` | Images |
 
 Rule: **one runnable HTML file.** New features go into `index.html` as a view
-or module, never as a separate page.
+or module, never as a separate page. The only exception is `handoff/`, which
+holds files built from `index.html` for the live-site developer.
 
 ---
 
@@ -127,7 +129,11 @@ or module, never as a separate page.
   - "DRAWINGS — LIVE PARITY" is a port of the live `drawing.html` logic:
     sections, sheet tabs, filters, hierarchical sort, drawings / BOM modals,
     1-hour private window, replace / delete approval requests, Rejected list,
-    Download Updated LOE, Pending Drawings (all projects) and export.
+    Download Updated LOE and export.
+  - The Kick-Off toolbar **Drawings** button (was "Pending Drawings") opens
+    the same page across all active projects (`ydOpenPendingDrawings`): every
+    row that takes drawings, released ones too; "Show: Drawings Not Uploaded"
+    gives the pending list. The Library Drawings button is in this header.
   - Where live calls the server, the prototype applies the same change to
     `projectsData` (stage moves via `koMoveStage`, which records
     `stageHistory`). When the live site changes, compare the new dumps with
@@ -200,11 +206,24 @@ designStatus, dispatchWeek, billingValue, releaseWeek`, plus:
   these). Hand edits in the Components window set `subtasksManual`.
 - `procurement` — YDAstra record (see §7).
 
+**Choose Folder (prototype addition):** each row's upload box has a folder
+button next to Upload. It lists every file in the chosen folder and all its
+subfolders (Office temp `~$…`, hidden and `Thumbs.db` / `desktop.ini` files
+skipped), all ticked, with Select All / Clear / Only BOMs / Only Drawings and a
+name filter; the ticked files go through the same upload as Choose Files —
+Excel → BOM, everything else → drawings.
+
 **BOM rule:** a BOM goes only on a row with nothing under it. With SR 1, 1.1,
 1.2, 2, 3, 4, 4.1 the BOMs are on 1.1, 1.2, 2, 3 and 4.1 — never on 1 or 4.
 The Drawings page shows parent rows as summaries (no upload box), the bulk
-upload window offers only those rows for a BOM file, and in the Library an
-assembly with subassemblies takes drawings but no BOM.
+upload window offers only those rows for a BOM file. In the Library the same
+holds for drawings too: a folder with subfolders takes no files (its row shows
+"x/y Drawings / BOM Uploaded" for the subfolders), and a folder that already
+has its own drawings or BOMs cannot be given subfolders.
+
+**Drawings page header:** one **LOE** menu (Download Updated LOE / Edit LOE),
+Upload BOMs, Library Drawings, **Copy Drawings (n)** — shown only while rows
+are ticked — and icon-only Rejected and Back buttons.
 
 `mergeLoeData()` keeps `rowId`, `drawingFiles`, `bomFiles`, `subtasks` and
 `procurement` when an LOE is re-uploaded. Drawings hierarchy follows live:
@@ -272,6 +291,26 @@ with SR …"); a PM-typed code for a non-drawing line is remembered
 after sending, a banner offers to re-open Stage 1. All storage calls go through
 `YDStore` — the block a backend port replaces.
 
+### 7a. Live handoff — `handoff/ydastra.html`
+
+The YDAstra layer packaged for the live site: the live `drawing.html` shell
+(head, header, attendance modal, `assets/…` scripts, `config.js` API_URL,
+login token) + YDAstra views, CSS and module from `index.html` + a **live
+connector** (`window.YDLive`).
+
+- Reads with existing routes: `kickoffRoutes/activeProjects`,
+  `projectAssemblies/:id`, `downloadAssemblyDrawing?key=` (BOMs are
+  parsed in the browser and cached per `fileKey`).
+- Saves through new routes the developer adds: `GET /ydastra/projects/:id`
+  (procurement per assembly, history, permissions), `PUT
+  /ydastra/assemblies/:assemblyId`, `GET|PUT /ydastra/settings/sapLibrary |
+  codeMemory`. Full contract, Mongo collections and an Express sketch are
+  in the comment at the top of the file.
+- Until those exist it keeps the data in the browser (IndexedDB
+  `ydastra-local`) and shows a yellow "Not saved to the server yet" banner.
+- Roles come from the backend `permissions` flags (missing = allowed).
+- Opened as `ydastra.html?project=<_id>`.
+
 ### SAP code rules (verified against the Products export)
 
 - **Assembly (YF):** `YF` + assembly drawing no. without hyphens →
@@ -305,7 +344,9 @@ the next upload.
 
 ## 8. Library Drawings (Design team)
 
-`#libraryView`, opened from the Kick-Off toolbar ("Library Drawings"). Same
+`#libraryView`, opened by the **Library Drawings** button on the Assembly
+Drawings page header (not on the Kick-Off toolbar); its back button returns
+to Assembly Drawings. Same
 layout as Assembly Drawings; kept deliberately simple.
 
 - Two levels, shown as **Folder** (SR 1, 2, …) → **Subfolder** (1.1, 1.2, …);
@@ -330,7 +371,10 @@ layout as Assembly Drawings; kept deliberately simple.
   assemblyId, subassemblyId, drawingNumber, currentRevisionId }],
   revisions[{ drawingId, revisionLabel, fileId, originalFilename,
   uploadedAt, uploadedBy }], usages[], activity[]`.
-- Delete is blocked while a drawing is linked into a project, and an
+- A link counts as "in use" only while its project still exists and a row
+  of it still holds the link; on opening the Library, usages left behind by
+  deleted projects / rows are marked inactive, so they no longer block a
+  delete. Delete is blocked while a drawing is linked into a project, and an
   assembly with subassemblies must be emptied first. Older library data
   (with components) is upgraded once on open: each component's drawings move
   up to its subassembly / assembly.
@@ -391,7 +435,8 @@ no section bars, no whole-number row that has sub-rows.
 
 ## 10. Rules for AI assistants
 
-1. **One runnable file.** Keep everything in `index.html`; no new HTML pages.
+1. **One runnable file.** Keep everything in `index.html`; no new HTML pages
+   (except generated handoff files in `handoff/`).
    `kickoff.html`, `drawings.html`, `activitylog.html` are references — never
    edit them, only read them.
 2. **Match the live site** for Kick-Off and Drawings UI/behaviour; the three

@@ -1,0 +1,3237 @@
+<!doctype html>
+<!--
+  ======================================================================
+  YDASTRA — procurement layer after BOM upload (YD Projects live site)
+  ======================================================================
+  One self-contained page. Put it next to drawing.html / kickOff.html (it
+  uses the same assets/ folder, config.js API_URL, login token, header,
+  main.js and attendance.js).
+
+  WHAT IT DOES (Projects team, per assembly that has a BOM on Drawings)
+    Stage 1  BOM to SAP   PM checks the auto-prepared codes for every BOM
+                          row: YF code (assembly), WBS element, YS code +
+                          description (drawing parts) or FS... codes
+                          (standard parts from the IS designation). Rows
+                          are green = in the SAP library, yellow = new
+                          code / please check, red = no code yet.
+                          "Send N new codes to SAP Team" downloads
+                          New_SAP_Codes_<proj>_<wbs>_<date>.xlsx; with no
+                          new codes it is "Submit BOM to SAP" directly.
+    Stage 2  SAP Check    SAP team ticks each new code "Created in SAP"
+                          (or it is found after a library update), then
+                          "Submit BOM to SAP" downloads
+                          BOM_to_SAP_<proj>_<wbs>_<date>.xlsx.
+    Stage 3  Ordering     two lines per component: PO / Jobwork, Vendor /
+                          Operator, Price, PO date, tentative ready date.
+    "Update SAP Library" = upload the SAP Products export (material
+    master, ~61k codes). Code rules (YF / WBS / YS / FS, 18-char code,
+    40-char description, SAP description wins) are in the module code.
+
+  OPEN IT
+    ydastra.html?project=<project _id>     (or no parameter: first active project)
+    Suggested button on kickOff.html ACTIVE rows, next to "Drawings":
+      <a class="btn btn-sm btn-primary fw-bold" href="ydastra.html?project=${p._id}">YDAstra</a>
+
+  READS (existing routes, nothing to change)
+    GET  ${API_URL}/kickoffRoutes/activeProjects
+         uses projects[]._id, projectNo, clientName, siteName, projectManager
+    GET  ${API_URL}/kickoffRoutes/projectAssemblies/:projectId
+         uses project{projectNo, clientName, siteName, projectManager},
+         assemblies[]{_id, srNo, assemblyName, drawingDocNo, qty, section,
+         sheet, dispatchWeek, bomFiles[]{_id, fileKey, originalName}}
+    GET  ${API_URL}/kickoffRoutes/downloadAssemblyDrawing?key=&name=
+         BOM bytes; parsed in the browser (B part no, D description, E qty,
+         F material, H weight or G when H4 is empty; rows from row 3).
+         Parsed rows are cached per fileKey in the browser.
+
+  NEW ENDPOINTS TO ADD (Bearer token, JSON). Until they exist the page
+  saves in the browser (IndexedDB "ydastra-local") and shows a yellow
+  "Not saved to the server yet" banner. A 404 / 405 / 501 or non-JSON
+  answer switches it to that mode, so routes can be added one by one.
+
+    GET  ${API_URL}/ydastra/projects/:projectId
+         200 { success: true,
+               procurement: { "<assemblyId>": <record>, ... },
+               history: [ { assemblyId, timestamp, user, action }, ... ],
+               permissions: { canEditCodes, canSendToSap, canMarkCreated,
+                              canEditOrders, canUpdateSapLibrary } }
+         permissions: decided on the server from the user's roles;
+         a missing flag means allowed. Super Admin = all true.
+
+    PUT  ${API_URL}/ydastra/assemblies/:assemblyId
+         body { projectId, procurement: <record>, history: [new lines] }
+         200 { success: true }   upsert the record, append the history.
+         Sent after every change, only for assemblies that changed.
+
+    GET  ${API_URL}/ydastra/settings/:name      name = sapLibrary | codeMemory
+         200 { success: true, value: <object or null> }
+    PUT  ${API_URL}/ydastra/settings/:name      body { value }
+         200 { success: true }
+         sapLibrary is large (about 3-4 MB JSON: { fileName, loadedAt,
+         rows: [[code, description, uom], ...], extras: [...] }) so this
+         route needs a bigger JSON body limit, e.g. express.json({ limit: '25mb' }).
+         codeMemory = codes a PM typed for non-drawing lines, reused next time.
+
+  <record> = procurement of one assembly (never touches the Design BOM):
+    { yfCode, yfDesc, wbs,                  '' = use the auto value
+      status: 'draft' | 'codesSent' | 'bomSubmitted',
+      sentSig, sentAt, submittedAt,         sentSig = BOM fingerprint at send;
+                                            if Design revises the BOM later
+                                            the page offers "Re-open Stage 1"
+      rows: { "<rowKey>": { ysCode, ysDesc, po1, po2, vendor1, vendor2,
+                            price1, price2, date1, date2, ready1, ready2 } },
+      newCodes: [ { kind: 'YS'|'YF'|'STD', code, desc, rowKey, created, createdAt } ] }
+    rowKey = part number without punctuation (or "C:" + component name),
+    "#n" added for repeats. Only values that differ from the auto value
+    are stored in rows.
+
+  SUGGESTED MONGODB COLLECTIONS
+    ydastra_procurement  { projectId, assemblyId (unique), procurement,
+                           updatedAt, updatedBy }
+    ydastra_history      { projectId, assemblyId, timestamp, user, action }
+    ydastra_settings     { _id: 'sapLibrary' | 'codeMemory', value, updatedAt }
+    Activity Log: good actions to add are ydastra.codesSent,
+    ydastra.codeCreated, ydastra.bomSubmitted, ydastra.orderUpdated.
+
+  EXPRESS SKETCH (adapt to the existing kickoffRoutes style / auth middleware)
+    const r = require('express').Router();
+    r.use(auth);                                   // same JWT middleware as kickoffRoutes
+    r.get('/projects/:projectId', async (req, res) => {
+      const recs = await Proc.find({ projectId: req.params.projectId }).lean();
+      const history = await Hist.find({ projectId: req.params.projectId }).sort({ timestamp: 1 }).lean();
+      res.json({ success: true,
+        procurement: Object.fromEntries(recs.map(x => [String(x.assemblyId), x.procurement])),
+        history, permissions: ydastraPermissions(req.user) });
+    });
+    r.put('/assemblies/:assemblyId', async (req, res) => {
+      const { projectId, procurement, history = [] } = req.body;
+      await Proc.updateOne({ assemblyId: req.params.assemblyId },
+        { $set: { projectId, procurement, updatedAt: new Date(), updatedBy: req.user._id } }, { upsert: true });
+      if (history.length) await Hist.insertMany(history.map(h => ({ ...h, projectId, assemblyId: req.params.assemblyId })));
+      res.json({ success: true });
+    });
+    r.get('/settings/:name', async (req, res) => {
+      const d = await Setting.findById(req.params.name).lean();
+      res.json({ success: true, value: d ? d.value : null });
+    });
+    r.put('/settings/:name', express.json({ limit: '25mb' }), async (req, res) => {
+      await Setting.updateOne({ _id: req.params.name }, { $set: { value: req.body.value, updatedAt: new Date() } }, { upsert: true });
+      res.json({ success: true });
+    });
+    app.use('/ydastra', r);
+
+  LATER
+    PO / production order / jobwork numbers read from SAP (exported
+    report, then a direct SAP S/4HANA link) keyed by WBS + material code.
+    Move BOM parsing to the server once more pages need the BOM rows.
+
+  Source: prototype index.html (ydcomplan repo), YDAstra module.
+  ======================================================================
+-->
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>YDAstra | YOGIJI DIGI</title>
+  <link href="assets/img/yd-favicon.png" rel="icon" />
+  <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+  <link href="assets/css/main.css" rel="stylesheet" />
+  <style>
+    :root {
+      --yd-primary: #2a5071;
+      --yd-red: #ad283f;
+    }
+
+    main {
+      margin-top: 30px;
+      margin-bottom: 0px;
+    }
+
+    /* Drawing upload progress bar — brand red instead of Bootstrap green.
+         The striped/animated overlay is a gradient on top, so only the
+         background-color needs overriding. */
+    .progress-bar.dwg-upload-bar {
+      background-color: var(--yd-red);
+    }
+
+    /* Transparent body so the fixed #hero background image (defined in
+         main.css) shows through, matching the look of kickOff.html. */
+    body {
+      background: transparent;
+    }
+
+    .content-card {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      padding: 24px;
+      border-radius: 15px;
+      box-shadow: 0px 0px 30px rgba(127, 137, 161, 0.25);
+    }
+
+    .page-title-bar {
+      background: transparent;
+      padding: 0 0 16px 0;
+      border-bottom: 1px solid #e6eaf0;
+      margin-bottom: 20px;
+    }
+
+    .page-title-bar h2 {
+      color: var(--yd-red);
+      font-weight: 700;
+      margin: 0;
+      font-size: 1.35rem;
+    }
+
+    .page-title-bar .meta {
+      color: #4b5563;
+      font-size: 0.85rem;
+      margin-top: 2px;
+    }
+
+    .stats-strip {
+      background: transparent;
+      padding: 0 0 14px 0;
+      display: flex;
+      gap: 32px;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      border-bottom: 1px dashed #e6eaf0;
+    }
+
+    .stats-strip .stat {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stats-strip .stat .label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #6b7280;
+    }
+
+    .stats-strip .stat .value {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #1f2937;
+    }
+
+    .table-wrap {
+      background: #fff;
+      border: 1px solid #e6eaf0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    table.assemblies thead {
+      background: var(--yd-primary);
+    }
+
+    table.assemblies th {
+      background: var(--yd-primary) !important;
+      color: #fff !important;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    table.assemblies thead th {
+      border-color: rgba(255, 255, 255, 0.28) !important;
+    }
+
+    table.assemblies th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    table.assemblies th.sortable::after {
+      content: "\f0dc";
+      font-family: "Font Awesome 6 Free";
+      font-weight: 900;
+      font-size: 0.65rem;
+      opacity: 0.65;
+      margin-left: 6px;
+    }
+
+    table.assemblies th.sortable.sort-asc::after {
+      content: "\f0de";
+      opacity: 1;
+    }
+
+    table.assemblies th.sortable.sort-desc::after {
+      content: "\f0dd";
+      opacity: 1;
+    }
+
+    .column-filter-row th {
+      background: #eef3f8 !important;
+      padding: 6px !important;
+    }
+
+    .column-filter-row .form-control {
+      min-width: 90px;
+      font-size: 0.74rem;
+      padding: 0.22rem 0.4rem;
+    }
+
+    .all-pending-only.d-none {
+      display: none !important;
+    }
+
+    table.assemblies td {
+      font-size: 0.85rem;
+      vertical-align: middle;
+    }
+
+    .drawing-list {
+      max-width: 240px;
+    }
+
+    .drawing-list a {
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .badge-released {
+      background: #16a34a;
+      color: #fff;
+    }
+
+    /* Soft "nothing uploaded" (0/x) badge — a muted light-red tint instead
+         of a harsh solid red. Visual-only; same size/text/icons. */
+    .badge-soft-danger {
+      background-color: #fdecec;
+      color: #b02a37;
+      border: 1px solid #f6d4d6;
+      font-weight: 600;
+    }
+
+    /* Muted "nothing uploaded" badge — clean neutral grey (no red). */
+    .badge-soft-muted {
+      background-color: #f4f6f8;
+      color: #6c757d;
+      border: 1px solid #e6e9ec;
+      font-weight: 600;
+    }
+
+    /* Upload column: two visually-separated themed sections. */
+    .up-sec {
+      border-radius: 6px;
+      padding: 6px;
+    }
+
+    .up-sec-drawing {
+      background-color: #eef4ff;
+      border: 1px solid #d6e4ff;
+    }
+
+    .up-sec-bom {
+      background-color: #eefbf1;
+      border: 1px solid #cdeed7;
+      margin-top: 8px;
+    }
+
+    /* Single combined Drawings + BOM card (replaces the old two cards). */
+    .up-sec-files {
+      background-color: #f6f8fc;
+      border: 1px solid #dbe3ef;
+    }
+
+    .up-sec-files .up-sec-title {
+      color: var(--yd-primary);
+    }
+
+    /* Compact View buttons (Drawings / BOM) — smaller than btn-sm. */
+    .up-sec-files .btn-view-compact {
+      font-size: 0.75rem;
+      padding: 2px 6px;
+      line-height: 1.3;
+    }
+
+    /* Filled state sits at a LIGHT shade and darkens on hover. */
+    .up-sec-files .btn-view-compact.btn-primary {
+      background-color: #2f7ff0;
+      border-color: #2f7ff0;
+      color: #fff;
+    }
+
+    .up-sec-files .btn-view-compact.btn-primary:hover,
+    .up-sec-files .btn-view-compact.btn-primary:focus {
+      background-color: #0b5ed7;
+      border-color: #0b5ed7;
+      color: #fff;
+    }
+
+    .up-sec-files .btn-view-compact.btn-success {
+      background-color: #1faa72;
+      border-color: #1faa72;
+      color: #fff;
+    }
+
+    .up-sec-files .btn-view-compact.btn-success:hover,
+    .up-sec-files .btn-view-compact.btn-success:focus {
+      background-color: #146c43;
+      border-color: #146c43;
+      color: #fff;
+    }
+
+    .up-sec-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+
+    .up-sec-drawing .up-sec-title {
+      color: #1d4ed8;
+    }
+
+    .up-sec-bom .up-sec-title {
+      color: #157347;
+    }
+
+    /* Whole parent row is clickable to expand/collapse — only when it
+         actually has an expand chevron (has children). */
+    tr.parent-row:has(.toggle-chevron:not(.invisible)) {
+      cursor: pointer;
+    }
+
+    .upload-cell {
+      min-width: 220px;
+    }
+
+    /* Parent (assembly) rows sit at a slightly darker shade so they read as
+         group headers; sub-assembly rows stay white. */
+    table.assemblies tbody tr.parent-row>td {
+      background: #eff1f5 !important;
+    }
+
+    .pending-approval-btn {
+      background: #fff;
+      border: 1px solid #ffc107;
+      color: #8a6100;
+      font-weight: 500;
+    }
+
+    .pending-approval-btn:hover {
+      border: 1px solid #ffc107;
+      background: #fff8e6;
+      color: #8a6100;
+    }
+
+    .pending-approval-btn.is-on {
+      background: #ffc107;
+      border-color: #e0a800;
+      color: #3d2f00;
+      font-weight: 600;
+    }
+
+    .pending-approval-btn.is-on:hover {
+      background: #ffca2c;
+      color: #3d2f00;
+    }
+
+    .pending-approval-btn .badge {
+      background: #ffc107 !important;
+      color: #3d2f00 !important;
+    }
+
+    /* Flipped on the amber background so the count stays readable. */
+    .pending-approval-btn.is-on .badge {
+      background: #3d2f00 !important;
+      color: #ffc107 !important;
+    }
+
+    .pending-approval-chip {
+      cursor: pointer;
+    }
+
+    .pending-approval-chip:hover,
+    .pending-approval-chip:focus {
+      filter: brightness(0.94);
+    }
+
+    /* The hover card has to sit above the sticky table header and the
+         row backgrounds, and stay readable over both. */
+    .approval-hovercard {
+      position: fixed;
+      z-index: 1080;
+      width: 340px;
+      max-width: calc(100vw - 24px);
+      background: #fff;
+      border: 1px solid #e6eaf0;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(16, 32, 56, 0.18);
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      /* A row can carry several open tickets, each with its own block —
+           cap the card and scroll rather than running off the viewport. */
+      max-height: min(70vh, 520px);
+      overflow-y: auto;
+    }
+
+    .approval-hovercard .hc-title {
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .approval-hovercard .hc-changes {
+      max-height: 190px;
+      overflow: auto;
+      margin: 8px 0 0;
+      padding-left: 1rem;
+    }
+
+    .approval-hovercard .hc-changes li {
+      margin-bottom: 2px;
+    }
+
+    tr.child-row {
+      background: #fff !important;
+    }
+
+    table.assemblies tbody tr.child-row>td {
+      background: #fff !important;
+    }
+
+    /* Top-level (whole-number SR) rows highlighted yellow   matches the
+         downloaded Excel and the online editor. */
+    table.assemblies tbody tr.sr-whole-row td {
+      /* background: #ffeb3b !important; */
+      font-weight: 600;
+    }
+
+    tr.section-divider td {
+      background: #2a5071 !important;
+      color: #fff !important;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      font-size: 0.85rem;
+      padding: 10px 14px;
+    }
+
+    tr.project-divider td {
+      background: #ad283f !important;
+    }
+
+    tr.child-row td:first-child {
+      padding-left: 2.2rem !important;
+    }
+
+    .toggle-chevron {
+      cursor: pointer;
+      display: inline-block;
+      width: 18px;
+      text-align: center;
+      margin-right: 6px;
+      transition: transform 0.15s ease;
+      color: var(--yd-primary);
+    }
+
+    .toggle-chevron.open {
+      transform: rotate(90deg);
+    }
+
+    .toggle-chevron.invisible {
+      visibility: hidden;
+    }
+
+    /* LOE sheet tabs (multi-sheet LOEs only) and the bar that titles each
+         sheet in the "All sheets" view. */
+    .sheet-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    tr.sheet-title-row td {
+      background: #2a5071 !important;
+      color: #fff !important;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .filter-row input[type="text"] {
+      max-width: 320px;
+    }
+
+    /* SweetAlert "Reason for replacement" popup: lift it above the
+         open Bootstrap modal and put breathing room around the prompt
+         text so the textarea isn't crammed against the heading. */
+    .swal-above-bs-modal {
+      z-index: 20000 !important;
+    }
+
+    /* "Reason for replacement" form: the request's details in an even
+         two-column grid, then the reason box on the same edges. */
+    .rr-form {
+      text-align: left;
+      font-size: 0.9rem;
+    }
+
+    .rr-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+    }
+
+    .rr-grid .rr-full {
+      grid-column: 1 / -1;
+    }
+
+    .rr-field label,
+    .rr-reason-label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #6b7280;
+      margin-bottom: 3px;
+    }
+
+    .rr-field label i {
+      width: 14px;
+      margin-right: 4px;
+      color: #2a5071;
+    }
+
+    .rr-field .form-control[readonly] {
+      background: #f3f5f8;
+      border-color: #e3e7ee;
+      color: #1f2937;
+      font-weight: 500;
+      cursor: default;
+    }
+
+    .rr-divider {
+      border: 0;
+      border-top: 1px solid #e5e7eb;
+      margin: 16px 0 12px;
+    }
+
+    .rr-hint {
+      font-size: 0.82rem;
+      color: #4b5563;
+      margin-bottom: 6px;
+    }
+
+    .rr-form textarea {
+      resize: vertical;
+      min-height: 96px;
+    }
+
+    .rr-count {
+      text-align: right;
+      font-size: 0.72rem;
+      color: #9ca3af;
+      margin-top: 3px;
+    }
+
+    @media (max-width: 520px) {
+      .rr-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* "Same drawing file elsewhere" chooser */
+    .lr-intro {
+      font-size: 0.9rem;
+      color: #4b5563;
+      text-align: left;
+    }
+
+    .lr-tools {
+      text-align: right;
+      font-size: 0.8rem;
+      margin: 8px 0 6px;
+    }
+
+    .lr-list {
+      max-height: 320px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      text-align: left;
+    }
+
+    .lr-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      margin: 0;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f2f5;
+    }
+
+    .lr-row:last-child {
+      border-bottom: 0;
+    }
+
+    .lr-row:hover {
+      background: #f8fafc;
+    }
+
+    .lr-row .lr-pick {
+      margin-top: 3px;
+      flex: none;
+    }
+
+    .lr-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      font-size: 0.88rem;
+    }
+
+    .lr-assembly {
+      color: #1f2937;
+    }
+
+    .lr-what {
+      color: #6b7280;
+      font-size: 0.8rem;
+      word-break: break-word;
+    }
+
+    /* Controls only some people may use — hidden for everyone else (the
+         server refuses them anyway). Hidden until the page knows. */
+    body.no-drawing-edit .design-only,
+    body.no-loe-edit #btnEditExcel {
+      display: none !important;
+    }
+
+    /* Yellow icon-only Replace button. Its own class because the site
+         stylesheet (assets/css/main.css) turns .btn-warning blue. */
+    .btn-replace {
+      --bs-btn-color: #212529;
+      --bs-btn-bg: #ffc107;
+      --bs-btn-border-color: #ffc107;
+      --bs-btn-hover-color: #212529;
+      --bs-btn-hover-bg: #e0a800;
+      --bs-btn-hover-border-color: #d39e00;
+      --bs-btn-active-color: #212529;
+      --bs-btn-active-bg: #d39e00;
+      --bs-btn-active-border-color: #c69500;
+    }
+
+    /* "Drawing / BOM requests" list (pending / approved / rejected) */
+    .rj-tools {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      text-align: left;
+    }
+
+    .rj-tools .form-control {
+      max-width: 260px;
+    }
+
+    .rj-count {
+      margin-left: auto;
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
+
+    .rj-wrap {
+      max-height: 60vh;
+      overflow: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+    }
+
+    .rj-table {
+      width: 100%;
+      font-size: 0.82rem;
+      text-align: left;
+      border-collapse: collapse;
+    }
+
+    .rj-table th {
+      position: sticky;
+      top: 0;
+      background: #f3f5f8;
+      padding: 8px 10px;
+      white-space: nowrap;
+      z-index: 1;
+    }
+
+    .rj-table td {
+      padding: 8px 10px;
+      border-top: 1px solid #f0f2f5;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    .rj-sub {
+      display: block;
+      color: #6b7280;
+      font-size: 0.76rem;
+    }
+
+    .rj-old {
+      color: #374151;
+    }
+
+    .rj-new {
+      color: #9f1239;
+      text-decoration: line-through;
+    }
+
+    /* Status tabs: own colours (main.css turns .btn-warning blue). */
+    .btn.fr-tab {
+      color: var(--fr-c);
+      border-color: var(--fr-c);
+      background: #fff;
+    }
+
+    .btn.fr-tab:hover,
+    .btn.fr-tab.active {
+      color: #fff;
+      background: var(--fr-c);
+      border-color: var(--fr-c);
+    }
+
+    .fr-tab-pending {
+      --fr-c: #b45309;
+    }
+
+    .fr-tab-approved {
+      --fr-c: #15803d;
+    }
+
+    .fr-tab-rejected {
+      --fr-c: #b91c1c;
+    }
+
+    /* New files: approved = now live, pending = waiting on a decision */
+    .rj-new-ok {
+      color: #15803d;
+    }
+
+    .rj-new-wait {
+      color: #1d4ed8;
+    }
+
+    .rj-reason {
+      color: #b91c1c;
+    }
+
+    .rj-empty {
+      padding: 28px;
+      color: #6b7280;
+      text-align: center;
+    }
+
+    .lr-tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 0 6px;
+      border-radius: 8px;
+      background: #e0ecf7;
+      color: #2a5071;
+      font-size: 0.72rem;
+      vertical-align: 1px;
+    }
+
+    .lr-warn {
+      color: #b45309;
+      font-size: 0.8rem;
+    }
+
+    /* BOM status block   make "uploaded" vs "not uploaded" obvious at a
+         glance in the Upload column. */
+    .bom-status .bom-badge-uploaded {
+      background: #16a34a;
+      color: #fff;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .bom-status .bom-badge-missing {
+      background: #f3f4f6;
+      color: #6b7280;
+      border: 1px dashed #cbd5e1;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    /* Rendered Excel/CSV preview inside the BOM modal. */
+    .bom-sheet-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .bom-sheet-tabs .btn.active {
+      background: var(--yd-primary);
+      color: #fff;
+    }
+
+    .bom-preview-wrap {
+      overflow: auto;
+      max-height: 60vh;
+      border: 1px solid #e6eaf0;
+      border-radius: 6px;
+    }
+
+    .bom-preview-wrap table {
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .bom-preview-wrap td,
+    .bom-preview-wrap th {
+      border: 1px solid #dbe2ea;
+      padding: 4px 8px;
+      white-space: nowrap;
+      vertical-align: top;
+    }
+
+    .bom-preview-wrap tr:first-child td {
+      background: #eef3f8;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    /* ================= YDAstra (from the prototype) ================= */
+    /* YDAstra Assemblies Table Styling */
+    #ydcAssemblyGridTable th {
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 8px !important;
+      font-size: 0.85rem;
+    }
+    .ydc-main-row {
+      height: 24px !important;
+      background-color: #e2e8f0 !important;
+      font-weight: bold;
+    }
+    .ydc-main-row td {
+      height: 24px !important;
+      line-height: 24px !important;
+      padding: 0px 8px !important;
+      font-size: 0.82rem;
+      vertical-align: middle;
+    }
+    .ydc-sub-row {
+      height: 21px !important;
+      background-color: #ffffff !important;
+      color: #4b5563;
+    }
+    .ydc-sub-row td {
+      height: 21px !important;
+      line-height: 21px !important;
+      padding: 0px 8px !important;
+      font-size: 0.82rem;
+      vertical-align: middle;
+    }
+    .ydc-chevron-parent {
+      transition: transform 0.2s;
+    }
+    /* Custom Context Menu styling */
+    #ydcContextMenu {
+      min-width: 160px;
+      font-size: 0.85rem;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+      background: white;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    #ydcContextMenu .dropdown-item {
+      padding: 6px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      color: #333;
+    }
+    #ydcContextMenu .dropdown-item:hover {
+      background-color: #f1f5f9;
+      color: #000;
+    }
+    .ydc-chevron-parent {
+      transition: transform 0.2s;
+    }
+    /* --- PROGRESS STEPPER STYLING --- */
+    .stepper-wrapper {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0 30px 0;
+      position: relative;
+    }
+    .stepper-item {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      z-index: 1;
+    }
+    .stepper-item::after {
+      position: absolute;
+      content: "";
+      border-bottom: 3px solid #e9ecef;
+      width: 100%;
+      top: 15px;
+      left: 50%;
+      z-index: -1;
+    }
+    .stepper-item:last-child::after {
+      display: none;
+    }
+    .stepper-item.completed::after {
+      border-bottom: 3px solid #198754;
+    }
+    .step-counter {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #e9ecef;
+      color: #6c757d;
+      font-weight: bold;
+      border: 3px solid #fff;
+      font-size: 13px;
+      transition: 0.3s;
+    }
+    .stepper-item.completed .step-counter {
+      background-color: #198754;
+      color: #fff;
+    }
+    .stepper-item.completed .step-name {
+      color: #198754;
+    }
+    .stepper-item.active .step-counter {
+      background-color: var(--yd-primary);
+      color: #fff;
+      box-shadow: 0 0 0 4px rgba(42, 80, 113, 0.2);
+    }
+    .stepper-item.active .step-name {
+      color: var(--yd-primary);
+    }
+    .step-name {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #6c757d;
+      margin-top: 8px;
+      text-align: center;
+      line-height: 1.2;
+    }
+    /* ---- Live kickOff.html: skipped stepper step (Finance bypassed) ----- */
+    .stepper-item.skipped .step-counter {
+      background-color: #fff;
+      color: #adb5bd;
+      border: 3px dashed #ced4da;
+    }
+    .stepper-item.skipped .step-name {
+      color: #adb5bd;
+      font-style: italic;
+    }
+    .stepper-item.skipped::after {
+      border-bottom: 3px dashed #dee2e6;
+    }
+    table.assemblies,
+    #ydcAssemblyGridTable,
+    #ydcExcelTable,
+    .ydc-table {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    table.assemblies thead,
+    #ydcAssemblyGridTable thead,
+    #ydcExcelTable thead,
+    .ydc-table thead {
+      background: #2a5071 !important;
+    }
+    table.assemblies th,
+    #ydcAssemblyGridTable th,
+    #ydcExcelTable th,
+    .ydc-table th {
+      background: #2a5071 !important;
+      color: #fff !important;
+      font-size: 0.78rem !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+      white-space: nowrap !important;
+      padding: 0.65rem 0.75rem !important;
+      vertical-align: middle !important;
+      position: relative;
+    }
+    .ydc-col-resizer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 8px;
+      cursor: col-resize;
+      user-select: none;
+      height: 100%;
+      z-index: 10;
+    }
+    .ydc-col-resizer:hover,
+    .ydc-col-resizer.resizing {
+      background: #38bdf8 !important;
+    }
+    table.assemblies thead th,
+    #ydcAssemblyGridTable thead th,
+    #ydcExcelTable thead th,
+    .ydc-table thead th {
+      border-color: rgba(255, 255, 255, 0.28) !important;
+    }
+    table.assemblies td,
+    #ydcAssemblyGridTable td,
+    #ydcExcelTable td,
+    .ydc-table td {
+      font-size: 0.85rem !important;
+      vertical-align: middle !important;
+      padding: 0.55rem 0.75rem !important;
+    }
+    #ydcExcelTable input.form-control-sm {
+      font-size: 0.85rem !important;
+      padding: 0.25rem 0.4rem !important;
+      height: 32px !important;
+    }
+    /* --- YDASTRA EXECUTION LAYER --- */
+    .ydc-workflow-card {
+      cursor: pointer;
+      transition: transform 0.18s, box-shadow 0.18s;
+      border: 2px solid transparent;
+    }
+    .ydc-workflow-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12) !important;
+    }
+    .ydc-workflow-card.active-stage {
+      border-color: var(--yd-primary) !important;
+      box-shadow: 0 0 0 3px rgba(42, 80, 113, 0.18) !important;
+    }
+    .ydc-assembly-card,
+    .ydc-proj-card {
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    }
+    .ydc-assembly-card:hover,
+    .ydc-proj-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1) !important;
+      border-color: var(--yd-red) !important;
+    }
+    /* YDAstra procurement: row confidence colours */
+    #ydcExcelTable tr.ydc-c-green > td { background: #f1faf4; }
+    #ydcExcelTable tr.ydc-c-yellow > td { background: #fff8e5; }
+    #ydcExcelTable tr.ydc-c-red > td { background: #fdeeee; }
+    #ydcExcelTable tr.ydc-c-green > td:first-child { box-shadow: inset 3px 0 0 #2f9e62; }
+    #ydcExcelTable tr.ydc-c-yellow > td:first-child { box-shadow: inset 3px 0 0 #e0a100; }
+    #ydcExcelTable tr.ydc-c-red > td:first-child { box-shadow: inset 3px 0 0 #d14343; }
+    .ydc-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: 0; }
+    .ydc-dot.g { background: #2f9e62; }
+    .ydc-dot.y { background: #e0a100; }
+    .ydc-dot.r { background: #d14343; }
+    .ydc-count { font-size: 0.78rem; font-weight: 600; color: #374151; }
+    .ydc-legend { display: flex; gap: 18px; font-size: 0.75rem; color: #6b7280; margin-bottom: 6px; }
+    .ydc-idstrip { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .ydc-idbox { min-width: 190px; border-radius: 6px; }
+    .ydc-idbox label { display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 2px; }
+    .ydc-idbox.ydc-c-green input { border-color: #2f9e62; }
+    .ydc-idbox.ydc-c-yellow input { border-color: #e0a100; }
+    .ydc-idbox.ydc-c-red input { border-color: #d14343; }
+    .ydc-breadcrumb {
+      font-size: 0.8rem;
+      color: #6c757d;
+      margin-bottom: 10px;
+    }
+    .ydc-breadcrumb span.ydc-link {
+      cursor: pointer;
+      color: var(--yd-primary);
+      text-decoration: underline dotted;
+    }
+    .ydc-breadcrumb span.ydc-link:hover {
+      color: var(--yd-red);
+    }
+    .ydc-stat-card {
+      background: #fff;
+      border-radius: 10px;
+      border: 1px solid #e6eaf0;
+      padding: 12px 16px;
+    }
+    .ydc-stat-val {
+      font-size: 1.55rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .ydc-stat-lbl {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #6b7280;
+      margin-top: 3px;
+    }
+    table.ydc-table thead th {
+      background-color: var(--yd-primary);
+      color: #fff;
+      font-size: 0.76rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.35px;
+      vertical-align: middle;
+      white-space: nowrap;
+      padding: 0.38rem 0.48rem;
+    }
+    table.ydc-table tbody td {
+      vertical-align: middle;
+      font-size: 0.83rem;
+      padding: 0.28rem 0.48rem;
+    }
+    table.ydc-table input.form-control,
+    table.ydc-table select.form-select {
+      font-size: 0.8rem;
+      padding: 0.18rem 0.38rem;
+      height: auto;
+    }
+    .ydc-save-btn {
+      background: #e8f0fb;
+      color: var(--yd-primary);
+      border: 1px solid var(--yd-primary);
+      padding: 3px 9px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .ydc-save-btn:hover:not(:disabled) {
+      background: #cce0f5;
+    }
+    .ydc-save-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .ydc-submit-btn {
+      background: var(--yd-primary);
+      color: #fff;
+      border: none;
+      padding: 3px 9px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .ydc-submit-btn:hover {
+      background: #1e3d57;
+      color: #fff;
+    }
+    .ydc-submitted-row td {
+      background: #f0fdf4 !important;
+    }
+    .ydc-progress-bar-wrap {
+      height: 5px;
+      background: #e9ecef;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .ydc-progress-bar-fill {
+      height: 100%;
+      background: var(--yd-primary);
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+    .ydc-stage-panel {
+      display: none;
+      background: #fff;
+      border: 1px solid #e6eaf0;
+      border-radius: 10px;
+      margin-top: 14px;
+      overflow: hidden;
+    }
+    .ydc-stage-panel.open {
+      display: block;
+      animation: ydcFadeDown 0.18s ease;
+    }
+    .ydc-panel-header {
+      background: var(--yd-primary);
+      color: #fff;
+      padding: 10px 16px;
+      font-weight: 700;
+      font-size: 0.88rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    /* YDAstra workspace: YF / WBS strip sits like the stats strip */
+    .ydc-idstrip {
+      background: transparent !important;
+      border: 0 !important;
+      border-bottom: 1px dashed #e6eaf0 !important;
+      border-radius: 0 !important;
+      padding: 0 0 14px 0 !important;
+      margin-bottom: 14px !important;
+    }
+    .ydc-idbox label {
+      font-size: 0.72rem !important;
+      text-transform: uppercase;
+      letter-spacing: 0.6px !important;
+      font-weight: 400 !important;
+    }
+    .filter-row .ydc-legend {
+      margin-bottom: 0;
+    }
+
+    /* backend permissions (see YDLive.applyPermissions) */
+    body.ydc-no-codes #ydcExcelTable .ydc-in,
+    body.ydc-no-orders #ydcExcelTable .ydc-ord {
+      pointer-events: none;
+      background: #f3f4f6 !important;
+    }
+
+    body.ydc-no-library #ydcProjectSummary label.btn-success {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body class="index-page">
+  <header id="header" class="header sticky-top" style="
+        background-color: #fff;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: 10px 0;
+      ">
+    <nav class="navbar navbar-light">
+      <div class="container-fluid d-flex flex-wrap align-items-center">
+        <a class="navbar-brand" href="ourClients.html">
+          <img src="assets/img/YDLOGO.png" alt="Logo" style="height: 45px" />
+        </a>
+        <div class="custom-nav-container">
+          <a href="projectReport.html" class="nav-btn-custom" style="background: #fde2e4; color: #9f1239">Report</a>
+          <a href="meetings.html" class="nav-btn-custom" style="background: #fff4cc; color: #92400e">Meeting</a>
+          <a href="kickOff.html" class="nav-btn-custom" style="background: #baf1ac; color: #3f891b">YD Ascend
+          </a>
+          <a href="#" class="nav-btn-custom" style="background: #e0f2fe; color: #0369a1" data-bs-toggle="modal"
+            data-bs-target="#attendanceModal">
+            Attendance
+          </a>
+        </div>
+        <div class="right-icons-group">
+          <a href="ourClients.html" class="position-relative text-decoration-none">
+            <i class="fa-solid fa-bell fa-lg" style="color: #4167a7; font-size: 1.5rem"></i>
+            <span id="unreadCount"
+              class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              style="font-size: 10px; padding: 3px 6px"></span>
+          </a>
+          <div class="dropdown">
+            <button class="btn-user-blue dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown"
+              aria-expanded="false">
+              <img src="assets/img/user.png" height="20px" style="filter: brightness(0) invert(1)" alt="User" />
+              <span id="engineerNameDisplay" class="d-none d-sm-inline">User</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
+              <li>
+                <a class="dropdown-item" href="changePassword.html">Change Password</a>
+              </li>
+              <li>
+                <hr class="dropdown-divider" />
+              </li>
+              <li>
+                <a class="dropdown-item text-danger" onclick="logout()">Logout</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main class="main">
+    <section id="hero" class="hero section"></section>
+    <!-- YDAstra Project Summary (Main View) — same layout as Assembly Drawings -->
+    <div id="ydcProjectSummary" style="display:none;">
+      <div class="container-fluid px-4 pb-5">
+        <div class="content-card">
+          <div class="page-title-bar d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+              <h2>
+                <i class="fa fa-cogs me-2"></i> YD Astra panel (YD Component Planning)
+                <select id="ydcProjectSelector" class="form-select form-select-sm d-inline-block w-auto ms-2"
+                  style="font-size: 16px; font-weight: normal; vertical-align: middle;"
+                  onchange="showYDAstraView(this.value)"></select>
+              </h2>
+              <div class="meta" id="ydcProjMeta"></div>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              <label class="btn btn-success btn-sm fw-bold mb-0" title="Upload the latest Products export from SAP">
+                <i class="fa fa-database me-1"></i>Update SAP Library
+                <input type="file" accept=".xlsx,.xls" hidden onchange="ydcUploadLibrary(this)">
+              </label>
+              <a href="kickOff.html" class="btn btn-outline-secondary btn-sm fw-bold">
+                <i class="fa fa-arrow-left me-1"></i>Back to Projects
+              </a>
+            </div>
+          </div>
+          <div id="ydcLocalBanner" class="alert alert-warning py-2 small d-none">
+            <i class="fa fa-triangle-exclamation me-1"></i><b>Not saved to the server yet.</b> The YDAstra endpoints
+            (<code>/ydastra/…</code>) are not on this backend, so changes are kept in <b>this browser only</b>.
+            Live projects, assemblies and BOMs are read from the real server.
+          </div>
+          <div class="stats-strip" id="ydcStats"></div>
+          <div class="filter-row">
+            <input type="text" class="form-control form-control-sm" id="ydcSearchInput"
+              placeholder="Filter assemblies by name, doc no, section" oninput="filterYdcTable()" />
+            <div class="d-flex align-items-center gap-2 mb-0">
+              <label class="form-label small mb-0">Show:</label>
+              <select class="form-select form-select-sm" id="ydcShowFilter" style="width: auto" onchange="filterYdcTable()">
+                <option value="">All assemblies</option>
+                <option value="noBom">Awaiting BOM</option>
+                <option value="draft">Stage 1 · BOM to SAP</option>
+                <option value="codesSent">Stage 2 · SAP Check</option>
+                <option value="bomSubmitted">Stage 3 · Ordering</option>
+              </select>
+            </div>
+            <span id="ydcLibraryStatus" class="ms-auto"></span>
+          </div>
+          <div id="ydcAssemblyGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- YDAstra Assembly workspace (3 stages) -->
+    <div id="ydcAssemblyView" style="display:none;">
+      <div class="container-fluid px-4 pb-5">
+        <div class="content-card">
+          <div class="page-title-bar d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+              <h2 id="ydcAsmTitle"><i class="fa fa-cubes me-2"></i>Assembly</h2>
+              <div class="meta" id="ydcAsmMeta"></div>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              <button type="button" class="btn btn-outline-secondary btn-sm fw-bold"
+                onclick="openYDAstraAssemblyDetailsModal(_ydcState.projId, _ydcState.loeIdx)">
+                <i class="fa fa-clock-rotate-left me-1"></i>History
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-sm fw-bold" onclick="ydcBackToProjects()">
+                <i class="fa fa-arrow-left me-1"></i>Back to Assemblies
+              </button>
+            </div>
+          </div>
+          <div id="ydcAssemblyComponentsExcelView"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal fade" id="ydcAssemblyDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content shadow-lg">
+        <div class="modal-header bg-light">
+          <h5 class="modal-title"><i class="fa fa-cubes text-primary me-2"></i>Assembly Progress & History</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-4">
+            <h6 class="fw-bold mb-1" id="ydcAsmDetName">Assembly Name</h6>
+            <div class="text-muted small" id="ydcAsmDetMeta">Meta details</div>
+          </div>
+          <!-- Stepper -->
+          <div id="ydcAssemblyStepper" class="stepper-wrapper mb-4">
+            <!-- Stepper steps injected by JS -->
+          </div>
+          <!-- History Log -->
+          <h6 class="fw-bold mb-2"><i class="fa fa-history text-secondary me-2"></i>Execution History</h6>
+          <ul class="list-group list-group-flush small" id="ydcAssemblyHistoryList"
+            style="max-height: 200px; overflow-y: auto;">
+            <!-- History items injected by JS -->
+          </ul>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Context Menu for BOM to SAP Table -->
+  <div id="ydcContextMenu" class="dropdown-menu shadow bg-white border border-secondary"
+    style="display: none; position: absolute; z-index: 2000;">
+    <!-- Items dynamically inserted by JS -->
+  </div>
+
+  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- jQuery: the YDAstra module is written with it (the other live pages don't load it) -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- same SheetJS build as drawing.html: reads BOMs and writes the SAP files -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <!-- Punch In / Punch Out — opened by the Attendance button in the
+         header and driven by assets/js/attendance.js. -->
+  <div class="modal fade" id="attendanceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">Mark Attendance</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center">
+          <div id="liveClock" class="fs-1 fw-bold mb-3" style="color: #ad283f">
+            00:00:00
+          </div>
+
+          <div class="mb-3 text-start">
+            <label class="form-label">Select Project</label>
+            <select id="projectSelect" class="form-select">
+              <option value="">-- Choose Project --</option>
+            </select>
+          </div>
+
+          <div id="attendanceStatus" class="mb-3 text-muted">
+            <p id="punchInTimeDisplay">Punch In: --:--</p>
+            <p id="punchOutTimeDisplay">Punch Out: --:--</p>
+          </div>
+
+          <div class="d-grid gap-2">
+            <button id="attendanceBtn" class="btn btn-success btn-lg" onclick="handleAttendance()">
+              Punch In
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/approvals.js"></script>
+  <script src="assets/js/issues.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  <script src="assets/js/main.js"></script>
+  <script src="assets/js/workWeek.js"></script>
+  <script src="assets/js/attendance.js"></script>
+
+
+  <script>
+    // ================================================================
+    // YDASTRA — LIVE CONNECTOR
+    // ----------------------------------------------------------------
+    // READS live data through the EXISTING kickoffRoutes (no backend change):
+    //   GET  ${API_URL}/kickoffRoutes/activeProjects              → project list
+    //   GET  ${API_URL}/kickoffRoutes/projectAssemblies/:projectId → assemblies + bomFiles
+    //   GET  ${API_URL}/kickoffRoutes/downloadAssemblyDrawing?key=&name= → BOM file bytes
+    // The BOMs are parsed here in the browser (live stores BOMs as files only).
+    //
+    // SAVES YDAstra's own data through NEW endpoints the backend has to add
+    // (contract at the bottom of this file, "BACKEND CONTRACT"). Until they
+    // answer, everything is kept in this browser (IndexedDB) and a yellow
+    // banner says so — the page is usable on localhost / dev tunnels at once.
+    //
+    // Roles: the backend decides. GET /ydastra/projects/:id may return
+    // { permissions: { canEditCodes, canSendToSap, canMarkCreated,
+    //   canEditOrders, canUpdateSapLibrary } }; anything missing = allowed.
+    // ================================================================
+    (function (w) {
+      'use strict';
+
+      const token = localStorage.getItem('token');
+      if (!token) { window.location.href = 'login.html'; return; }
+      const API = () => (typeof API_URL !== 'undefined' ? API_URL : w.API_URL || '');
+      const auth = () => ({ Authorization: `Bearer ${token}` });
+
+      function currentUser() {
+        try { return JSON.parse(localStorage.getItem('user') || 'null') || {}; } catch (e) { return {}; }
+      }
+      const userName = () => { const u = currentUser(); return u.name || u.fullName || u.username || u.email || 'User'; };
+
+      // ---- helpers the YDAstra module uses (same as the prototype) ----
+      w.escapeHtml = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      w.isDividerRow = a => !/^\d+(?:\.\d+)*$/.test(String((a && a.srNo) || '').trim());
+      w.parseWeekValue = function (val) {
+        if (!val || val === '-') return 999999;
+        const m = String(val).trim().match(/(?:WW|Wk)?\s*(\d{1,2})\b(?:\s*(\d{4}))?/i);
+        return m ? (m[2] ? +m[2] : new Date().getFullYear()) * 100 + +m[1] : 999999;
+      };
+      w.showDashboardView = () => { window.location.href = 'kickOff.html'; };
+      w.showDrawingsView = projId => { window.location.href = 'drawing.html' + (projId ? '?project=' + encodeURIComponent(projId) : ''); };
+
+      // ---- browser fallback store (IndexedDB, one key-value store) ----
+      const Local = {
+        _db: null,
+        open() {
+          if (this._db) return Promise.resolve(this._db);
+          return new Promise((res, rej) => {
+            const r = indexedDB.open('ydastra-local', 1);
+            r.onupgradeneeded = () => r.result.createObjectStore('kv');
+            r.onsuccess = () => { this._db = r.result; res(r.result); };
+            r.onerror = () => rej(r.error);
+          });
+        },
+        async get(k) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
+        async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+      };
+
+      // ---- YDAstra store: backend first, this browser when it is not there yet ----
+      let mode = null;   // 'server' | 'local'
+      function useLocal(why) {
+        if (mode === 'local') return;
+        mode = 'local';
+        console.warn('YDAstra: saving in this browser —', why);
+        const b = document.getElementById('ydcLocalBanner');
+        if (b) b.classList.remove('d-none');
+      }
+      // null → endpoint missing (fall back); throws on real errors
+      async function call(method, path, body) {
+        if (mode === 'local') return null;
+        let res;
+        try {
+          res = await fetch(`${API()}/ydastra${path}`, { method, headers: { ...auth(), 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+        } catch (e) { useLocal('server not reachable'); return null; }
+        if (res.status === 404 || res.status === 405 || res.status === 501) { useLocal(`/ydastra${path} → ${res.status}`); return null; }
+        const data = await res.json().catch(() => null);
+        if (!data) { useLocal(`/ydastra${path} did not answer JSON`); return null; }
+        if (res.status === 401) { window.location.href = 'login.html'; throw new Error('Please log in again'); }
+        if (!res.ok || data.success === false) throw new Error(data.message || `YDAstra save failed (${res.status})`);
+        mode = 'server';
+        return data;
+      }
+      const Store = {
+        async project(projectId) {
+          const d = await call('GET', `/projects/${encodeURIComponent(projectId)}`);
+          if (d) return { procurement: d.procurement || {}, history: d.history || [], permissions: d.permissions || {} };
+          return (await Local.get('project:' + projectId)) || { procurement: {}, history: [], permissions: {} };
+        },
+        async saveAssembly(projectId, assemblyId, procurement, history) {
+          const d = await call('PUT', `/assemblies/${encodeURIComponent(assemblyId)}`, { projectId, procurement, history });
+          if (d) return;
+          const cur = (await Local.get('project:' + projectId)) || { procurement: {}, history: [] };
+          cur.procurement[assemblyId] = procurement;
+          cur.history = (cur.history || []).concat(history || []);
+          await Local.set('project:' + projectId, cur);
+        },
+        async getSetting(name) {
+          const d = await call('GET', `/settings/${name}`);
+          return d ? (d.value == null ? null : d.value) : ((await Local.get('setting:' + name)) || null);
+        },
+        async setSetting(name, value) {
+          const d = await call('PUT', `/settings/${name}`, { value });
+          if (!d) await Local.set('setting:' + name, value);
+        }
+      };
+
+      // ---- live reads ----
+      async function live(path) {
+        const res = await fetch(`${API()}/kickoffRoutes${path}`, { headers: auth() });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) { window.location.href = 'login.html'; throw new Error('Please log in again'); }
+        if (!res.ok || data.success === false) throw new Error(data.message || `Request failed (${res.status})`);
+        return data;
+      }
+
+      // BOM layout (Design team): title row, header row, components from
+      // row 3; B part no, D description, E qty, F material, H weight (G when
+      // H4 is empty). Parsed once per file key and cached in this browser.
+      function parseBomRows(buf) {
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+        const sd = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+        const wtCol = (sd[3] && sd[3][7] !== undefined && String(sd[3][7]).trim()) ? 7 : 6;
+        const rows = [];
+        for (let i = 2; i < sd.length; i++) {
+          const r = sd[i] || [];
+          const v = k => r[k] !== undefined ? String(r[k]).trim() : '';
+          if (v(3) || v(1) || v(4) || v(5) || v(wtCol)) rows.push({ component: v(3), drawingNo: v(1), qty: v(4), material: v(5), weight: v(wtCol) });
+        }
+        return rows;
+      }
+      async function bomRowsOf(f) {
+        const ck = 'bom:' + f.fileKey;
+        const cached = await Local.get(ck).catch(() => null);
+        if (cached) return cached;
+        const res = await fetch(`${API()}/kickoffRoutes/downloadAssemblyDrawing?key=${encodeURIComponent(f.fileKey)}&name=${encodeURIComponent(f.originalName || 'bom.xlsx')}`, { headers: auth() });
+        if (!res.ok) throw new Error(`Could not download ${f.originalName || 'BOM'}`);
+        const rows = parseBomRows(await res.arrayBuffer());
+        Local.set(ck, rows).catch(() => { });
+        return rows;
+      }
+      async function inPool(items, n, fn) {
+        let i = 0;
+        await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) { const k = i++; await fn(items[k], k); } }));
+      }
+
+      // projectsData = live projects in the prototype's shape; a project's
+      // loeData is filled when it is opened.
+      w.projectsData = [];
+      const loaded = new Map();   // projectId → { snap: {asmId: json}, histSaved: n }
+      let perms = {};
+      const isBom = f => /\.(xlsx|xlsm|xls|csv)$/i.test((f && (f.originalName || f.fileKey)) || '');
+
+      async function loadProjectList() {
+        const d = await live('/activeProjects');
+        w.projectsData = (d.projects || []).map(p => ({
+          id: String(p._id), projNo: p.projectNo || '', client: p.clientName || p.client || '', site: p.siteName || p.site || '',
+          machine: p.machineType || p.machine || '', pm: p.projectManager || p.pm || '', loeData: [], ydcHistory: [], _live: true
+        }));
+      }
+
+      async function loadProject(projectId) {
+        const proj = w.projectsData.find(p => p.id === String(projectId));
+        if (!proj) throw new Error('This project is not in the active projects list.');
+        Swal.fire({ title: 'Loading project', html: 'Reading assemblies…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        try {
+          const [d, saved] = await Promise.all([live(`/projectAssemblies/${encodeURIComponent(projectId)}`), Store.project(projectId)]);
+          perms = saved.permissions || {};
+          applyPermissions();
+          const info = d.project || {};
+          proj.projNo = info.projectNo || proj.projNo; proj.client = info.clientName || proj.client;
+          proj.site = info.siteName || proj.site; proj.pm = info.projectManager || proj.pm;
+          proj.loeData = (d.assemblies || []).map(a => ({
+            _id: String(a._id), srNo: a.srNo || '', assemblyName: a.assemblyName || '', drawingNo: a.drawingDocNo || a.drawingNo || '',
+            qty: a.qty || '', section: a.section || '', sheetName: a.sheet || '', dispatchWeek: a.dispatchWeek || '',
+            bomFiles: (a.bomFiles || []).filter(isBom), subtasks: [],
+            procurement: saved.procurement[String(a._id)] || undefined
+          }));
+          const jobs = [];
+          proj.loeData.forEach(lr => lr.bomFiles.forEach(f => jobs.push({ lr, f })));
+          let done = 0, failed = [];
+          const per = new Map();
+          await inPool(jobs, 4, async j => {
+            try { per.set(j.f, (await bomRowsOf(j.f)).map(r => Object.assign({ bomFileId: String(j.f._id || j.f.fileKey) }, r))); }
+            catch (e) { failed.push(j.f.originalName || j.f.fileKey); }
+            Swal.update({ html: `Reading BOMs ${++done} / ${jobs.length}` }); Swal.showLoading();
+          });
+          proj.loeData.forEach(lr => { lr.subtasks = lr.bomFiles.flatMap(f => per.get(f) || []); });
+          const byId = new Map(proj.loeData.map((lr, i) => [lr._id, i]));
+          proj.ydcHistory = (saved.history || []).filter(h => byId.has(String(h.assemblyId)))
+            .map(h => ({ loeIdx: byId.get(String(h.assemblyId)), timestamp: h.timestamp, user: h.user, action: h.action }));
+          loaded.set(proj.id, { snap: snapOf(proj), histSaved: proj.ydcHistory.length });
+          Swal.close();
+          if (failed.length) Swal.fire('Some BOMs could not be read', failed.map(w.escapeHtml).join('<br>'), 'warning');
+        } catch (e) { Swal.close(); throw e; }
+      }
+      const snapOf = proj => Object.fromEntries(proj.loeData.map(lr => [lr._id, JSON.stringify(lr.procurement || null)]));
+
+      // the module calls saveProjects() after every change: send only the
+      // assemblies whose procurement changed, with their new history lines
+      let chain = Promise.resolve();
+      w.saveProjects = function () {
+        chain = chain.then(async () => {
+          for (const [pid, st] of loaded) {
+            const proj = w.projectsData.find(p => p.id === pid); if (!proj) continue;
+            const fresh = proj.ydcHistory.slice(st.histSaved);
+            const histBy = new Map();
+            fresh.forEach(h => { const lr = proj.loeData[h.loeIdx]; if (!lr) return; if (!histBy.has(lr._id)) histBy.set(lr._id, []); histBy.get(lr._id).push({ assemblyId: lr._id, timestamp: h.timestamp, user: h.user, action: h.action }); });
+            for (const lr of proj.loeData) {
+              const j = JSON.stringify(lr.procurement || null);
+              if (j === st.snap[lr._id] && !histBy.has(lr._id)) continue;
+              await Store.saveAssembly(pid, lr._id, lr.procurement || null, histBy.get(lr._id) || []);
+              st.snap[lr._id] = j;
+            }
+            st.histSaved = proj.ydcHistory.length;
+          }
+        }).catch(e => { console.error(e); Swal.fire('Not saved', e.message || String(e), 'error'); });
+        return chain;
+      };
+
+      // ---- permissions from the backend (missing = allowed) ----
+      const can = k => perms[k] !== false;
+      function applyPermissions() {
+        document.body.classList.toggle('ydc-no-codes', !can('canEditCodes'));
+        document.body.classList.toggle('ydc-no-orders', !can('canEditOrders'));
+        document.body.classList.toggle('ydc-no-library', !can('canUpdateSapLibrary'));
+      }
+      const deny = () => Swal.fire('Not allowed', 'Your role cannot do this step.', 'warning');
+      function guard(name, perm) {
+        const f = w[name]; if (typeof f !== 'function') return;
+        w[name] = function () { return can(perm) ? f.apply(this, arguments) : deny(); };
+      }
+      document.addEventListener('change', e => {
+        const t = e.target;
+        if ((t.matches && t.matches('#ydcExcelTable .ydc-in') && !can('canEditCodes')) || (t.matches && t.matches('#ydcExcelTable .ydc-ord') && !can('canEditOrders'))) {
+          e.stopImmediatePropagation(); deny();
+        }
+      }, true);
+
+      w.YDLive = {
+        userName, Store, loadProjectList, loadProject, can,
+        get mode() { return mode; },
+        // called once the YDAstra module below has defined its functions
+        start: async function () {
+          ['ydcSave', 'ydcSetId', 'ydcReopen'].forEach(n => guard(n, 'canEditCodes'));
+          ['ydcSendNewCodes', 'ydcSubmitBom'].forEach(n => guard(n, 'canSendToSap'));
+          guard('ydcMarkCreated', 'canMarkCreated');
+          guard('ydcUploadLibrary', 'canUpdateSapLibrary');
+          const open = w.showYDAstraView;
+          w.showYDAstraView = async function (projId) {
+            try {
+              projId = projId || new URLSearchParams(location.search).get('project') || (w.projectsData[0] && w.projectsData[0].id);
+              if (projId && !loaded.has(String(projId))) await loadProject(projId);
+              if (projId) history.replaceState(null, '', '?project=' + encodeURIComponent(projId));
+              return open.call(this, projId);
+            } catch (e) { Swal.fire('Could not open the project', e.message || String(e), 'error'); }
+          };
+          try { await loadProjectList(); }
+          catch (e) { return Swal.fire('Could not load projects', e.message || String(e), 'error'); }
+          w.showYDAstraView();
+        }
+      };
+    })(window);
+  </script>
+
+  <script>
+    // ================================================================
+    // YDASTRA — PROCUREMENT MODULE (Projects team, after BOM upload)
+    // ----------------------------------------------------------------
+    // Per assembly (an LOE row whose BOM Design uploaded on Drawings):
+    //   Stage 1  BOM to SAP  – PM checks the auto-prepared YF code, WBS
+    //                          element, YS codes and YS descriptions.
+    //                          New codes go to the SAP team first.
+    //   Stage 2  SAP Check   – SAP team (Yashveer, Shivam) creates the
+    //                          new codes; then the PM submits the BOM.
+    //   Stage 3  Ordering    – PO / Jobwork per component.
+    //
+    // PROCUREMENT RECORD (stored on loeRow.procurement, never on the
+    // Design BOM itself, so a BOM re-upload does not wipe PM work):
+    //   { yfCode, yfDesc, wbs,            // '' = use the auto value
+    //     status: 'draft' | 'codesSent' | 'bomSubmitted',
+    //     sentSig, sentAt, submittedAt,   // sentSig = BOM fingerprint at send
+    //     rows: { [rowKey]: { ysCode, ysDesc, po1, po2, vendor1, vendor2,
+    //                         price1, price2, date1, date2, ready1, ready2 } },
+    //     newCodes: [{ kind: 'YS'|'YF', code, desc, rowKey, created, createdAt }] }
+    //
+    // SAP library (the "Products" export) and the PM's learned mappings
+    // live in their own IndexedDB keys. All storage access goes through
+    // YDStore below — the one block a backend port has to replace.
+    // ================================================================
+    (function (w) {
+      'use strict';
+
+      const SAP_TEAM = 'SAP Team (Yashveer, Shivam)';
+      const MAX_CODE = 18, MAX_DESC = 40;
+
+      const STAGES = [
+        { key: 'sap', label: 'BOM to SAP' },
+        { key: 'sapCheck', label: 'SAP Check' },
+        { key: 'ordering', label: 'Ordering' }
+      ];
+
+      // ================================================================
+      // DATA LAYER — replace these four functions to move to the server
+      // ================================================================
+      const YDStore = {
+        saveProjects: async function () {
+          let fn = w.saveProjects || (typeof saveProjects === 'function' ? saveProjects : null);
+          if (fn) await fn();
+        },
+        loadLibrary: function () { return w.YDLive.Store.getSetting('sapLibrary'); },
+        saveLibrary: function (lib) { return w.YDLive.Store.setSetting('sapLibrary', lib); },
+        loadMemory: function () { return w.YDLive.Store.getSetting('codeMemory'); },
+        saveMemory: function (mem) { return w.YDLive.Store.setSetting('codeMemory', mem); }
+      };
+
+      // ---- Module state ----
+      w._ydcState = { projId: null, loeIdx: null, stage: null };
+
+      function pData() { return w.projectsData || []; }
+      function getP(id) { return pData().find(p => p.id == id); }
+      function hasBom(lr) { return !!(lr && lr.subtasks && lr.subtasks.length); }
+      // every active live project is listed; its assemblies load when it is opened
+      function isEligible(p) { return p && (p._live || (p.loeData || []).some(hasBom)); }
+      w.ydcProjectHasBom = isEligible;
+      function esc(v) {
+        return w.escapeHtml
+          ? w.escapeHtml(v)
+          : String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      }
+      const clean = s => String(s == null ? '' : s).replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const alnum = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const today = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const toast = (title, icon) => Swal.fire({ toast: true, position: 'top-end', icon: icon || 'success', title: title, timer: 1600, showConfirmButton: false });
+
+      function hideAllYDC() {
+        $('#ydcProjectSummary').hide();
+        $('#ydcAssemblyView').hide();
+      }
+
+      function logHistory(proj, loeIdx, action, user) {
+        if (!proj.ydcHistory) proj.ydcHistory = [];
+        proj.ydcHistory.push({ loeIdx: loeIdx, timestamp: new Date().toISOString(), user: user || w.YDLive.userName(), action: action });
+      }
+
+      // ================================================================
+      // SAP LIBRARY (Products export) + learned mappings
+      // ================================================================
+      const LIB = { map: new Map(), fileName: '', loadedAt: '', count: 0, numIndex: null, items: null };
+      let MEMORY = {};
+
+      function buildLibrary(saved) {
+        LIB.map = new Map();
+        LIB.numIndex = null;
+        LIB.items = null;
+        if (!saved || !saved.rows) { LIB.count = 0; return; }
+        saved.rows.forEach(r => LIB.map.set(r[0], { code: r[0], desc: r[1] || '', uom: r[2] || '', deleted: /^DELETE/i.test(r[1] || '') }));
+        (saved.extras || []).forEach(r => { if (!LIB.map.has(r[0])) LIB.map.set(r[0], { code: r[0], desc: r[1], uom: '', deleted: false, created: true }); });
+        LIB.fileName = saved.fileName || '';
+        LIB.loadedAt = saved.loadedAt || '';
+        LIB.count = saved.rows.length;
+      }
+
+      function libGet(code) { return code ? LIB.map.get(String(code).trim()) : null; }
+
+      // Codes from rules can differ from the master only in the grade suffix
+      // spacing ("FSNT07M30 G2") or a missing suffix ("FSNT38M48").
+      function libFind(code) {
+        if (!code) return null;
+        let tries = [code, code.replace(/ (G\d)$/, '$1'), code.replace(/(\d)(G\d)$/, '$1 $2'), code.replace(/ ?G\d$/, '')];
+        for (let c of tries) { let it = libGet(c); if (it && !it.deleted) return it; }
+        return null;
+      }
+
+      // Number-led search for bought-out items with no rule (bearings,
+      // oil seals, rotary unions...). Only YS/YF-free, non-deleted items.
+      const STOP = new Set(['MM', 'THK', 'LONG', 'MODEL', 'NO', 'DIA', 'SIZE', 'TYPE', 'WITH', 'AND', 'FOR', 'STD', 'MAKE', 'REV']);
+      const words = s => (String(s).toUpperCase().match(/[A-Z]{3,}/g) || []).filter(x => !STOP.has(x));
+      const nums = s => Array.from(new Set(String(s).match(/\d+(?:\.\d+)?/g) || [])).filter(n => n.replace('.', '').length >= 2);
+
+      function ensureNumIndex() {
+        if (LIB.numIndex) return;
+        LIB.numIndex = new Map();
+        LIB.items = [];
+        LIB.map.forEach(it => {
+          if (it.deleted || /^Y[SF]/.test(it.code)) return;
+          let i = LIB.items.push(it) - 1;
+          nums(it.desc + ' ' + it.code).forEach(n => {
+            if (!LIB.numIndex.has(n)) LIB.numIndex.set(n, []);
+            LIB.numIndex.get(n).push(i);
+          });
+        });
+      }
+
+      function libSearch(text) {
+        if (!LIB.count) return null;
+        ensureNumIndex();
+        let qn = nums(text), qw = words(text);
+        if (!qn.length || !qw.length) return null;
+        let score = new Map();
+        qn.forEach(n => (LIB.numIndex.get(n) || []).forEach(i => score.set(i, (score.get(i) || 0) + 1)));
+        let best = null;
+        score.forEach((numHits, i) => {
+          let it = LIB.items[i];
+          let longHit = qn.some(n => n.length >= 4 && nums(it.desc + ' ' + it.code).includes(n));
+          if (numHits < 2 && !longHit) return;
+          let dw = words(it.desc);
+          let wordHits = qw.filter(x => dw.includes(x)).length;
+          if (!wordHits) return;
+          let s = numHits * 2 + wordHits;
+          if (!best || s > best.s) best = { s: s, it: it };
+        });
+        return best ? best.it : null;
+      }
+
+      function parseLibraryWorkbook(wb) {
+        let ws = wb.Sheets[wb.SheetNames[0]];
+        let rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
+        let h = -1, cCode = -1, cDesc = -1, cUom = -1;
+        for (let i = 0; i < Math.min(rows.length, 15) && h < 0; i++) {
+          let r = (rows[i] || []).map(x => String(x || '').toLowerCase().trim());
+          let d = r.findIndex(x => x.includes('description'));
+          let c = r.findIndex(x => x.startsWith('product') && !/description|type|group|category/.test(x));
+          if (d >= 0 && c >= 0) { h = i; cCode = c; cDesc = d; cUom = r.findIndex(x => x.includes('base unit')); }
+        }
+        if (h < 0) throw new Error('Could not find the "Product" and "Product Description" columns.');
+        let out = [];
+        for (let i = h + 1; i < rows.length; i++) {
+          let r = rows[i] || [];
+          let code = clean(r[cCode]);
+          if (code) out.push([code, clean(r[cDesc]), cUom >= 0 ? clean(r[cUom]) : '']);
+        }
+        return out;
+      }
+
+      w.ydcUploadLibrary = function (input) {
+        let file = input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+        Swal.fire({ title: 'Reading SAP library…', text: file.name, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        let reader = new FileReader();
+        reader.onload = async function (e) {
+          try {
+            let wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            let rows = parseLibraryWorkbook(wb);
+            let saved = { fileName: file.name, loadedAt: new Date().toISOString(), rows: rows, extras: [] };
+            await YDStore.saveLibrary(saved);
+            buildLibrary(saved);
+            Swal.fire({ icon: 'success', title: 'SAP library updated', text: rows.length.toLocaleString('en-IN') + ' codes loaded from ' + file.name, timer: 2200, showConfirmButton: false });
+            rerender();
+          } catch (err) {
+            Swal.fire('Could not read the file', err.message || String(err), 'error');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      // Codes the SAP team confirmed as created count as "in SAP" until the
+      // next library upload replaces them with the real export.
+      async function addCreatedToLibrary(codes) {
+        let saved = (await YDStore.loadLibrary()) || { fileName: '', loadedAt: '', rows: [], extras: [] };
+        saved.extras = saved.extras || [];
+        codes.forEach(c => { if (!saved.extras.some(x => x[0] === c.code)) saved.extras.push([c.code, c.desc]); });
+        await YDStore.saveLibrary(saved);
+        buildLibrary(saved);
+      }
+
+      const memKey = (pn, name) => alnum(pn) + '|' + alnum(name);
+
+      async function initLibrary() {
+        if (!w.YDLive) return setTimeout(initLibrary, 200); // connector not set up yet
+        try {
+          buildLibrary(await YDStore.loadLibrary());
+          MEMORY = (await YDStore.loadMemory()) || {};
+        } catch (e) { console.error('SAP library load failed', e); }
+        rerender();
+      }
+
+      function libraryBadgeHtml() {
+        if (!LIB.count) {
+          return `<span class="text-danger fw-semibold small"><i class="fa fa-triangle-exclamation me-1"></i>SAP library not loaded</span>`;
+        }
+        let when = LIB.loadedAt ? new Date(LIB.loadedAt).toLocaleDateString('en-IN') : '';
+        return `<span class="text-muted small" title="${esc(LIB.fileName)}"><i class="fa fa-database me-1"></i>SAP library: ${LIB.count.toLocaleString('en-IN')} codes · ${esc(when)}</span>`;
+      }
+
+      // ================================================================
+      // STANDARD-PART RULES (BOM rows with an IS designation, no drawing)
+      // Code + description in the SAP master's own format; the result is
+      // then looked up in the library, and the library wins.
+      // ================================================================
+      const YDC_STD = (function () {
+        const GRADE_TEXT = { G1: 'G-8.8', G2: 'G-10.9', G3: 'G-12.9', G4: 'SS-304', G5: 'SS-316', G6: 'SS-310' };
+        const DEFAULT_GRADE = 'G2'; // company standard: 10.9 unless the BOM says otherwise
+        // IS 2016 plain washer hole size -> bolt size (M)
+        const WASHER_HOLE_TO_M = { '4.3': 4, '4.5': 4, '5.3': 5, '5.5': 5, '6.4': 6, '6.6': 6, '7': 6, '8.4': 8, '9': 8, '10.5': 10, '11': 10, '13': 12, '13.5': 12, '14': 12, '15': 14, '17': 16, '18': 16, '19': 18, '20': 18, '21': 20, '22': 20, '23': 22, '24': 22, '25': 24, '26': 24, '28': 27, '30': 27, '31': 30, '33': 30, '34': 33, '36': 33, '37': 36, '39': 36, '40': 39, '42': 39, '43': 42, '45': 42, '46': 45, '48': 45, '50': 48, '52': 48, '54': 52, '56': 52 };
+        // Bearing lock nut KM number for thread size (IS 6731 / DIN 981)
+        const KM = { 10: '00', 12: '01', 15: '02', 17: '03', 20: '04', 25: '05', 30: '06', 35: '07', 40: '08', 45: '09', 50: '10', 55: '11', 60: '12', 65: '13', 70: '14', 75: '15', 80: '16', 85: '17', 90: '18', 95: '19', 100: '20', 105: '21', 110: '22', 115: '23', 120: '24', 125: '25', 130: '26', 135: '27', 140: '28', 145: '29', 150: '30', 155: '31', 160: '32', 165: '33', 170: '34', 180: '36', 190: '38', 200: '40' };
+        // Master writes some DN sizes as "D50" and others as "DN65" in gasket codes
+        const GASKET_DN_STYLE = { 10: 'DN', 15: 'DN', 20: 'DN', 25: 'D', 32: 'DN', 40: 'DN', 50: 'D', 65: 'DN', 80: 'DN', 100: 'D', 125: 'D', 150: 'D', 200: 'D', 250: 'DN', 300: 'DN' };
+
+        const pad2 = n => String(n).padStart(2, '0');
+        const kmPitch = m => m <= 10 ? '0.75' : m <= 20 ? '1.00' : m <= 50 ? '1.50' : m <= 150 ? '2.00' : '3.00';
+        const stripStd = t => t.replace(/\b(IS|DIN|ISO|EN)\s*-?\s*\d{3,5}(?:\s*\(?PART\s*\d\)?|-\d)?/g, ' ');
+
+        function norm(s) {
+          return String(s || '').toUpperCase().replace(/[\r\n]+/g, ' ').replace(/[×✕]/g, 'X').replace(/\s+/g, ' ').trim();
+        }
+        function parseGrade(t) {
+          if (/\b12\.9\b/.test(t)) return 'G3';
+          if (/\b10\.9\b/.test(t)) return 'G2';
+          if (/\b8\.8\b/.test(t)) return 'G1';
+          if (/SS[\s-]?310/.test(t)) return 'G6';
+          if (/SS[\s-]?316|\bA4\b/.test(t)) return 'G5';
+          if (/SS[\s-]?304|\bA2\b|STAINLESS|\bSS\b/.test(t)) return 'G4';
+          return DEFAULT_GRADE;
+        }
+        const isSS = g => /^G[456]$/.test(g);
+        function parseMxL(t) {
+          let m = t.match(/\bM\s*(\d{1,3})\s*X\s*(\d{1,4})\b/) || t.match(/(\d{1,3})\s*X\s*(\d{1,4})\s*(?:MM|LG|LONG)?\b/);
+          return m ? { m: parseInt(m[1], 10), l: parseInt(m[2], 10) } : null;
+        }
+        function parseM(t) {
+          let m = t.match(/\bM\s*(\d{1,3})\b/);
+          return m ? parseInt(m[1], 10) : null;
+        }
+        // Size after the standard number, e.g. "IS 2016 A- 11", "IS 3063- 12-A"
+        function parseTrailingSize(t) {
+          let m = t.match(/IS\s*\d{4}(?:\s*\(?PART\s*\d\)?|-\d)?\s*(?:[A-Z]{1,2}\s*)?-\s*(\d{1,3}(?:\.\d)?)\b/);
+          if (m) return m[1];
+          m = stripStd(t).match(/\b(\d{1,3}(?:\.\d)?)\s*(?:MM)?\b/);
+          return m ? m[1] : null;
+        }
+        const res = (family, code, desc) => ({ code, desc, family });
+
+        // order matters: nuts / washers before bolts
+        const RULES = [
+          {
+            test: t => /IS\s*6731|LOCK\s*NUT|\bKM\s*\d\d\b/.test(t) && !/LOCK\s*WASHER/.test(t),
+            map: t => {
+              let m = parseM(t) || parseInt(parseTrailingSize(t) || '', 10) || null;
+              let km = t.match(/\bKM\s*(\d\d)\b/);
+              if (km) { let mm = Object.keys(KM).find(k => KM[k] === km[1]); m = mm ? parseInt(mm, 10) : m; }
+              if (!m || !KM[m]) return null;
+              return res('Lock nut', 'FSNT10KM' + KM[m], 'LOCK NUT -M' + m + ' x ' + kmPitch(m) + ' ,KM' + KM[m]);
+            }
+          },
+          {
+            test: t => /THIN\s*NUT|IS\s*1364[-\s]*(?:PART\s*)?4\b/.test(t),
+            map: t => {
+              let m = parseM(t); if (!m) return null;
+              return res('Thin nut', 'FSNT38M' + pad2(m) + 'G2', 'HEXAGON THIN NUT-M' + pad2(m));
+            }
+          },
+          {
+            test: t => /\bNUT\b/.test(t) && !/LOCK\s*NUT|THIN|FLANGE|NYLOC|WING|DOME|CAP\s*NUT|WITH\s*WASHER|U-?BOLT|BOLT\s*&|BOLT,/.test(t),
+            map: t => {
+              let m = parseM(t); if (!m) return null;
+              let g = parseGrade(t);
+              return res('Hexagon nut', 'FSNT07M' + pad2(m) + (isSS(g) ? g : ' ' + g), 'HEXAGON NUT- M' + pad2(m) + ' ,' + GRADE_TEXT[g]);
+            }
+          },
+          {
+            test: t => /IS\s*2016|PLAIN\s*WASHER|FLAT\s*WASHER|\bWASHER\b(?!.*SPRING)/.test(t) && !/SPRING|LOCK\s*WASHER|TAPER|MACHIN|COPPER|\bBOLT\b|\bNUT\b/.test(t),
+            map: t => {
+              let m = parseM(t);
+              if (!m) { let s = parseTrailingSize(t); if (s) m = WASHER_HOLE_TO_M[s] || (Number.isInteger(+s) ? +s : null); }
+              if (!m) return null;
+              let g = parseGrade(t), ss = isSS(g);
+              return res('Plain washer', 'FSWR13M' + pad2(m) + (ss ? g : ''), 'PLAIN WASHER -M' + pad2(m) + (ss ? ' ,' + GRADE_TEXT[g] : ''));
+            }
+          },
+          {
+            test: t => /IS\s*3063|IS\s*6735|SPRING\s*(LOCK\s*)?WASHER/.test(t),
+            map: t => {
+              let m = parseM(t);
+              if (!m) { let s = parseTrailingSize(t); if (s) m = parseInt(s, 10) || null; }
+              if (!m) return null;
+              let g = parseGrade(t), ss = isSS(g);
+              return res('Spring washer', 'FSWR16D' + pad2(m) + (ss ? g : ''), 'SPRING WASHER-' + pad2(m) + 'MM' + (ss ? ',' + GRADE_TEXT[g] : ''));
+            }
+          },
+          {
+            test: t => /IS\s*2269|SOCKET\s*HEAD\s*CAP|\bSHCS\b|ALLEN\s*(BOLT|SCREW|CAP)/.test(t) && !/COUNTERSUNK|\bCSK\b|GRUB|PLUG/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              let g = parseGrade(t);
+              return res('Allen bolt', 'FSBT01M' + pad2(s.m) + 'L' + pad2(s.l) + g, 'ALLEN BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g]);
+            }
+          },
+          {
+            test: t => /IS\s*6761|COUNTERSUNK|\bCSK\b|\bC\.S\.K\b/.test(t) && /SCREW|BOLT|CSK/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              let g = parseGrade(t);
+              return res('CSK bolt', 'FSBT03M' + pad2(s.m) + 'L' + pad2(s.l) + g, 'CSK BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g]);
+            }
+          },
+          {
+            test: t => /GRUB\s*SCREW|SET\s*SCREW|IS\s*6094/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              let g = parseGrade(t);
+              return res('Grub screw', 'FSSW06M' + pad2(s.m) + 'L' + pad2(s.l) + g, 'HEX SOCKET GRUB SCREW- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g]);
+            }
+          },
+          {
+            test: t => /IS\s*1363|IS\s*1364\s*HHB|HEX(?:AGON)?\.?\s*(HEAD\s*)?(BOLT|SCREW)|\bHHB\b|\bHEX\s*BOLT\b/.test(t) && !/WITH\s*NUT|,\s*NUT|&\s*NUT/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              let g = parseGrade(t);
+              return res('Hexagon head bolt', 'FSBT08M' + pad2(s.m) + 'L' + pad2(s.l) + g, 'HEXAGON HEAD BOLT- M' + pad2(s.m) + 'X' + pad2(s.l) + 'MM ,' + GRADE_TEXT[g]);
+            }
+          },
+          {
+            test: t => /DOWEL\s*PIN/.test(t),
+            map: t => {
+              let s = parseMxL(t); if (!s) return null;
+              return res('Dowel pin', 'FSPN25M' + pad2(s.m) + 'L' + pad2(s.l), 'DOWEL PIN- M' + pad2(s.m) + 'X' + s.l + 'MM');
+            }
+          },
+          {
+            test: t => /GREASE\s*NIPPLE/.test(t),
+            map: t => {
+              let s = t.match(/(\d(?:\s*-\s*\d)?(?:\s*\/\s*\d+)?)\s*(?:"|INCH|BSP)/); if (!s) return null;
+              let size = s[1].replace(/\s+/g, '').replace(/^(\d)-(\d+)$/, '$1/$2');
+              return res('Grease nipple', 'FSNP05D' + size, 'GREASE NIPPLE ' + size + '" BSP SS304');
+            }
+          },
+          {
+            test: t => /CIRCLIP|RETAINING\s*RING/.test(t),
+            map: t => {
+              let d = stripStd(t).match(/(?:DIA|Ø)?\s*-?\s*(\d{1,3})\s*(?:MM)?\b(?!\s*X)/); if (!d) return null;
+              let internal = /INTERNAL|\bINT\b|BORE/.test(t);
+              return res(internal ? 'Internal circlip' : 'External circlip', 'FSCC' + (internal ? '20' : '19') + 'D' + pad2(d[1]), (internal ? 'INTERNAL CIRCLIP ,DIA-' : 'EXTERNAL CIRCLIP ,DIA-') + pad2(d[1]) + ' MM');
+            }
+          },
+          {
+            test: t => /PARALLEL\s*KEY|\bKEY\b.*\d+\s*X\s*\d+\s*X\s*\d+/.test(t),
+            map: t => {
+              let k = t.match(/(\d{1,3})\s*X\s*(\d{1,3})\s*X\s*(\d{1,4})/); if (!k) return null;
+              return res('Parallel key', 'FSKE12D' + pad2(k[1]) + 'L' + pad2(k[2]) + 'H' + k[3], 'PARALLEL KEY-(' + (+k[1]) + 'X' + (+k[2]) + 'X' + (+k[3]) + ')MM');
+            }
+          },
+          {
+            test: t => /GASK[EI]T/.test(t) && /\b(DN|NB)\s*-?\s*\d{2,3}|\d{2,3}\s*(NB|DN)\b/.test(t),
+            map: t => {
+              let d = t.match(/\b(?:DN|NB)\s*-?\s*(\d{2,3})\b/) || t.match(/\b(\d{2,3})\s*(?:NB|DN)\b/); if (!d) return null;
+              let dn = parseInt(d[1], 10);
+              if (/ANSI|B16\.5|CL[\s-]*150|CLASS\s*150/.test(t)) return res('Flange gasket (ANSI)', 'GFL' + (GASKET_DN_STYLE[dn] || 'DN') + dn + 'S1', 'GASKET,NEOPRENE,DN' + dn + ',CL-150,ANSI B16.5');
+              let thk = (t.match(/(\d(?:\.\d)?)\s*(?:MM)?\s*THK/) || [])[1] || '3';
+              return res('Flange gasket (EN-1092 PN6)', 'GPFL' + (GASKET_DN_STYLE[dn] || 'DN') + dn + 'S2', 'GASKET,PN6 FLANGE,DN' + dn + ',' + thk + 'THK,EN-1092');
+            }
+          }
+        ];
+
+        function isStandardDesignation(t) {
+          return /^(IS|DIN|ISO|EN|ANSI|ASME|JIS|BS)\s*[-\s]?\d/.test(t) || /GASK[EI]T/.test(t);
+        }
+        // Project drawing number, e.g. 2630-TRL-01-01-00-001
+        function isProjectDrawingNo(dwg) {
+          let t = norm(dwg);
+          if (!t || isStandardDesignation(t)) return false;
+          t = t.replace(/[^A-Z0-9]/g, '');
+          return /^[A-Z]{0,2}\d{4}[A-Z]{1,5}\d{2,}$/.test(t);
+        }
+        function map(partNo, component) {
+          let text = (norm(partNo) + ' ' + norm(component)).trim();
+          for (let r of RULES) {
+            if (!r.test(text)) continue;
+            let out = r.map(text);
+            if (out) return out;
+          }
+          return null;
+        }
+        return { map, isProjectDrawingNo, DEFAULT_GRADE };
+      })();
+      w.YDC_STD = YDC_STD;
+
+      // ================================================================
+      // ASSEMBLY IDENTIFIERS — YF code, YF description, WBS element
+      // 2630-CAR-01-03-00-000  ->  YF2630CAR010300000 / WBS 2630CAR0103
+      // ================================================================
+      const DWG_RE = /(\d{4})-([A-Z]{2,5})-(\d{2})-(\d{2})-(\d{2})-(\d{3})/;
+
+      function assemblyDrawingNo(lr) {
+        let own = String(lr.drawingNo || '').toUpperCase().match(DWG_RE);
+        if (own) return own[0];
+        // fall back to the parts' own numbers: most common first four groups
+        let count = {};
+        (lr.subtasks || []).forEach(st => {
+          let m = String(st.drawingNo || '').toUpperCase().match(DWG_RE);
+          if (m) { let k = m.slice(1, 5).join('-'); count[k] = (count[k] || 0) + 1; }
+        });
+        let best = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+        return best ? best + '-00-000' : '';
+      }
+
+      function autoIds(proj, lr) {
+        let dwg = assemblyDrawingNo(lr);
+        if (!dwg) return { yfCode: '', yfDesc: '', wbs: '' };
+        let parts = dwg.split('-');
+        let yfCode = 'YF' + parts.join('');
+        let hit = libGet(yfCode);
+        let projNo = parts[0];
+        let yfDesc = hit && !hit.deleted ? hit.desc : fitDesc(projNo + '-' + clean(lr.assemblyName).toUpperCase(), '');
+        return { yfCode: yfCode, yfDesc: yfDesc, wbs: parts.slice(0, 4).join('') };
+      }
+
+      function ids(proj, lr) {
+        let a = autoIds(proj, lr), pr = lr.procurement || {};
+        return { yfCode: pr.yfCode || a.yfCode, yfDesc: pr.yfDesc || a.yfDesc, wbs: pr.wbs || a.wbs };
+      }
+
+      // "NAME (2630TRL)", never longer than SAP's 40 characters
+      function fitDesc(name, tag) {
+        let suffix = tag ? ' (' + tag + ')' : '';
+        let room = MAX_DESC - suffix.length;
+        let n = clean(name).toUpperCase();
+        if (n.length > room) {
+          n = n.slice(0, room);
+          let cut = n.lastIndexOf(' ');
+          if (cut > room * 0.6) n = n.slice(0, cut);
+          n = n.replace(/[\s,.-]+$/, '');
+        }
+        return n + suffix;
+      }
+
+      // ================================================================
+      // ROW RESOLUTION — one code + description + confidence per BOM row
+      //   green  : code is in the SAP library and the names agree
+      //   yellow : new code (SAP team to create) or a match worth a look
+      //   red    : no usable code yet — PM must type it
+      // ================================================================
+      function bomRows(lr) {
+        let seen = {};
+        return (lr.subtasks || []).map((st, i) => {
+          let pn = clean(st.drawingNo), name = clean(st.component);
+          let base = alnum(pn) || ('C:' + alnum(name)) || ('ROW' + i);
+          seen[base] = (seen[base] || 0) + 1;
+          return {
+            i: i, key: seen[base] > 1 ? base + '#' + seen[base] : base,
+            partNo: pn, name: name, qty: clean(st.qty), material: clean(st.material), weight: clean(st.weight)
+          };
+        });
+      }
+
+      function bomSig(rows) { return rows.map(r => r.key + ':' + r.qty).join('|'); }
+
+      function autoCode(r) {
+        let learned = MEMORY[memKey(r.partNo, r.name)];
+        if (learned) return { code: learned.code, desc: learned.desc, source: 'learned' };
+        if (YDC_STD.isProjectDrawingNo(r.partNo)) {
+          let code = 'YS' + alnum(r.partNo).replace(/^YS/, '');
+          let hit = libGet(code);
+          if (hit && !hit.deleted) return { code: code, desc: hit.desc, source: 'drawing' };
+          return { code: code, desc: fitDesc(r.name, alnum(r.partNo).replace(/^YS/, '').slice(0, 7)), source: 'drawing' };
+        }
+        let std = YDC_STD.map(r.partNo, r.name);
+        if (std) {
+          let hit = libFind(std.code);
+          return hit ? { code: hit.code, desc: hit.desc, source: 'std' } : { code: std.code, desc: std.desc, source: 'std' };
+        }
+        let found = libSearch(r.partNo + ' ' + r.name);
+        if (found) return { code: found.code, desc: found.desc, source: 'search' };
+        return { code: '', desc: fitDesc(r.name, ''), source: 'none' };
+      }
+
+      // Share of the BOM name's words found in the SAP name (CYL ~ CYLINDER)
+      function nameAgreement(bomName, sapDesc) {
+        let a = words(bomName), b = words(String(sapDesc).replace(/\([^)]*\)\s*$/, ''));
+        if (!a.length) return 1;
+        let hit = a.filter(x => b.some(y => x === y || (Math.min(x.length, y.length) >= 3 && (x.startsWith(y) || y.startsWith(x))))).length;
+        return hit / a.length;
+      }
+
+      function requestedElsewhere(proj, code, loeIdx) {
+        let out = null;
+        (proj.loeData || []).forEach((lr, idx) => {
+          if (idx === loeIdx || out) return;
+          let pr = lr.procurement;
+          if (!pr || pr.status === 'draft') return;
+          let c = (pr.newCodes || []).find(x => x.code === code);
+          if (c) out = { sr: lr.srNo, created: !!c.created };
+        });
+        return out;
+      }
+
+      function resolveRows(proj, loeIdx) {
+        let lr = proj.loeData[loeIdx];
+        let pr = lr.procurement || { rows: {} };
+        let rows = bomRows(lr);
+        rows.forEach(r => {
+          let ov = (pr.rows && pr.rows[r.key]) || {};
+          let auto = autoCode(r);
+          r.auto = auto;
+          r.code = ov.ysCode != null ? ov.ysCode : auto.code;
+          let hit = libGet(r.code);
+          r.desc = ov.ysDesc != null ? ov.ysDesc : ((ov.ysCode != null && hit) ? hit.desc : auto.desc);
+          r.override = ov.ysCode != null || ov.ysDesc != null;
+          r.inLib = !!(hit && !hit.deleted);
+          r.order = ov;
+
+          if (!r.code) { r.level = 'red'; r.why = 'No code could be made — type the SAP code'; }
+          else if (r.code.length > MAX_CODE) { r.level = 'red'; r.why = 'Code longer than ' + MAX_CODE + ' characters'; }
+          else if (!r.desc || r.desc.length > MAX_DESC) { r.level = 'red'; r.why = 'Description must be 1–' + MAX_DESC + ' characters'; }
+          else if (hit && hit.deleted) { r.level = 'red'; r.why = 'This code is marked Deleted in SAP'; }
+          else if (r.inLib) {
+            if (auto.source === 'search' && !r.override) { r.level = 'yellow'; r.why = 'Closest item in SAP library — please check'; }
+            else if (nameAgreement(r.name, hit.desc) < 0.6 && auto.source === 'drawing' && !r.override) { r.level = 'yellow'; r.why = 'SAP name differs from BOM name (' + r.name + ')'; }
+            else { r.level = 'green'; r.why = hit.created ? 'Created by SAP team' : 'In SAP library'; }
+          } else {
+            let other = requestedElsewhere(proj, r.code, loeIdx);
+            r.level = 'yellow';
+            r.isNew = true;
+            r.why = !LIB.count ? 'SAP library not loaded — cannot check'
+              : other ? 'New code — already requested with SR ' + other.sr
+                : 'New code — SAP team to create';
+            if (other) r.requestedWith = other;
+          }
+        });
+        // same code with two different descriptions inside one BOM
+        let byCode = {};
+        rows.forEach(r => { if (r.code) (byCode[r.code] = byCode[r.code] || []).push(r); });
+        Object.values(byCode).forEach(list => {
+          if (new Set(list.map(r => r.desc)).size > 1) list.forEach(r => { r.level = 'red'; r.why = 'Same code used with different descriptions in this BOM'; });
+        });
+        return rows;
+      }
+
+      // New codes this assembly must request (YS rows + the YF code)
+      function collectNewCodes(proj, lr, rows) {
+        let list = [], seen = new Set();
+        let id = ids(proj, lr);
+        if (id.yfCode && LIB.count && !libGet(id.yfCode)) { list.push({ kind: 'YF', code: id.yfCode, desc: id.yfDesc, rowKey: '', created: false }); seen.add(id.yfCode); }
+        rows.forEach(r => {
+          if (!r.isNew || r.requestedWith || seen.has(r.code)) return;
+          seen.add(r.code);
+          list.push({ kind: r.code.startsWith('YS') ? 'YS' : 'STD', code: r.code, desc: r.desc, rowKey: r.key, created: false });
+        });
+        return list;
+      }
+
+      // ================================================================
+      // PROCUREMENT RECORD — create / migrate
+      // ================================================================
+      function ensureProc(proj, lr) {
+        if (lr.procurement) {
+          lr.procurement.rows = lr.procurement.rows || {};
+          lr.procurement.newCodes = lr.procurement.newCodes || [];
+          return lr.procurement;
+        }
+        let pr = { yfCode: '', yfDesc: '', wbs: '', status: 'draft', rows: {}, newCodes: [] };
+        // carry over data entered with the earlier prototype
+        bomRows(lr).forEach(r => {
+          let st = lr.subtasks[r.i] || {}, o = {};
+          ['po1', 'po2', 'vendor1', 'vendor2', 'price1', 'price2', 'date1', 'date2', 'ready1', 'ready2'].forEach(k => { if (st[k]) o[k] = st[k]; });
+          let auto = autoCode(r);
+          if (st.ysCode && st.ysCode !== auto.code) o.ysCode = st.ysCode;
+          if (st.ysDescription && st.ysDescription !== auto.desc) o.ysDesc = st.ysDescription;
+          if (Object.keys(o).length) pr.rows[r.key] = o;
+        });
+        if (lr.sapReviewCompleted) pr.status = 'bomSubmitted';
+        else if (lr.sapSent) pr.status = 'codesSent';
+        lr.procurement = pr;
+        return pr;
+      }
+
+      function procStatus(lr) {
+        if (!hasBom(lr)) return 'noBom';
+        return (lr.procurement && lr.procurement.status) || 'draft';
+      }
+
+      function defaultStage(lr) {
+        let s = procStatus(lr);
+        return s === 'bomSubmitted' ? 'ordering' : s === 'codesSent' ? 'sapCheck' : 'sap';
+      }
+
+      // ================================================================
+      // VIEW 1: project → assemblies list
+      // ================================================================
+      w.showYDAstraView = function (projId) {
+        $('#dashboardView').hide();
+        $('#drawingsView').hide();
+        $('.main').addClass('drawings-mode');
+        $('#navYdAscend').show();
+        hideAllYDC();
+
+        let eligs = pData().filter(isEligible);
+        $('#ydcProjectSelector').html(eligs.map(p => `<option value="${p.id}">${esc(p.projNo || 'TBD')} - ${esc(p.client || 'N/A')}</option>`).join(''));
+
+        let target = projId && getP(projId) && isEligible(getP(projId)) ? projId : (eligs[0] && eligs[0].id);
+        if (target) {
+          $('#ydcProjectSelector').val(target);
+          w.openYDAstraProject(target);
+        } else {
+          $('#ydcProjectSummary').fadeIn(200);
+          $('#ydcProjMeta').html('<span class="text-danger">No project has a BOM uploaded yet. Assemblies appear here as soon as Design uploads a BOM on the Drawings page.</span>');
+          $('#ydcLibraryStatus').html(libraryBadgeHtml());
+          $('#ydcAssemblyGrid').html('');
+        }
+      };
+
+      w.openYDAstraProject = function (projId) {
+        let proj = getP(projId);
+        if (!proj) return;
+        w._ydcState.projId = projId;
+        w._ydcState.loeIdx = null;
+
+        hideAllYDC();
+        $('#ydcProjectSummary').fadeIn(200);
+        if (YV.projId !== projId) { YV.projId = projId; YV.open = new Set(); }
+        let nAsm = (proj.loeData || []).filter(lr => !(w.isDividerRow && w.isDividerRow(lr))).length;
+        $('#ydcProjMeta').text(`Project: ${proj.projNo || 'TBD'} - ${proj.client || '—'} · PM: ${proj.pm || 'TBD'} · ${nAsm} assemblies`);
+        $('#ydcLibraryStatus').html(libraryBadgeHtml());
+        renderAsmGrid(proj);
+      };
+
+      w.ydcBackToProjects = function () {
+        if (w._ydcState.projId != null) w.openYDAstraProject(w._ydcState.projId);
+        else w.showYDAstraView();
+      };
+
+      // Same table as Assembly Drawings: sections, parent / child rows,
+      // column filters, sortable headers; the last column is procurement.
+      const YV = { projId: null, q: '', show: '', col: {}, sortKey: '', sortDir: 1, open: new Set() };
+      const collate = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+      const isDivider = lr => w.isDividerRow ? w.isDividerRow(lr) : !/^\d+(?:\.\d+)*$/.test(String(lr.srNo || '').trim());
+
+      function stageInfo(lr) {
+        let s = procStatus(lr);
+        if (s === 'noBom') return { s: s, text: 'awaiting bom', badge: '<span class="badge badge-soft-muted">Awaiting BOM</span>' };
+        if (s === 'draft') return { s: s, text: 'stage 1 bom to sap', badge: '<span class="badge bg-warning text-dark">Stage 1 · BOM to SAP</span>' };
+        if (s === 'codesSent') return { s: s, text: 'stage 2 sap check', badge: '<span class="badge bg-info text-dark">Stage 2 · SAP Check</span>' };
+        return { s: s, text: 'stage 3 ordering', badge: '<span class="badge bg-success"><i class="fa fa-circle-check me-1"></i>Stage 3 · Ordering</span>' };
+      }
+
+      function parentStatus(proj, kids) {
+        let st = kids.map(k => procStatus(proj.loeData[k]));
+        if (st.length && st.every(x => x === 'bomSubmitted')) return '<span class="badge bg-success"><i class="fa fa-circle-check me-1"></i>Submitted</span>';
+        if (st.some(x => x !== 'noBom')) return '<span class="badge bg-warning text-dark">In progress</span>';
+        return '<span class="badge badge-soft-muted">Awaiting BOM</span>';
+      }
+
+      function procCell(proj, idx, kids) {
+        let lr = proj.loeData[idx];
+        if (!hasBom(lr)) {
+          if (!kids.length) return '<div class="up-sec up-sec-files"><span class="text-muted small"><i class="fa fa-circle-info me-1"></i>Opens when Design uploads the BOM</span></div>';
+          let withBom = kids.filter(k => hasBom(proj.loeData[k])).length;
+          let done = kids.filter(k => procStatus(proj.loeData[k]) === 'bomSubmitted').length;
+          const cls = (u, t) => u === 0 ? 'badge-soft-muted' : u >= t ? 'bg-success' : 'bg-warning text-dark';
+          return `<div class="up-sec up-sec-files"><div class="up-sec-title"><i class="fa fa-folder-open me-1"></i>Procurement</div>
+              <span class="badge ${cls(withBom, kids.length)}"><i class="fa fa-file-excel me-1"></i>${withBom}/${kids.length} BOM Uploaded</span>
+              <span class="badge ${cls(done, kids.length)}"><i class="fa fa-paper-plane me-1"></i>${done}/${kids.length} Submitted to SAP</span></div>`;
+        }
+        let s = procStatus(lr), rows = resolveRows(proj, idx), info;
+        if (s === 'draft') {
+          let c = { green: 0, yellow: 0, red: 0 };
+          rows.forEach(r => c[r.level]++);
+          info = [c.green && `<span class="badge bg-success" title="Code found in the SAP library">${c.green} in SAP</span>`,
+            c.yellow && `<span class="badge bg-warning text-dark" title="New code for the SAP team, or a match worth checking">${c.yellow} new / check</span>`,
+            c.red && `<span class="badge bg-danger" title="No code yet — PM to fill">${c.red} no code</span>`].filter(Boolean).join(' ') || '<span class="badge badge-soft-muted">No components</span>';
+        } else if (s === 'codesSent') {
+          let nc = lr.procurement.newCodes || [];
+          info = `<span class="badge bg-info text-dark">${nc.filter(x => x.created).length}/${nc.length} codes created</span>`;
+        } else {
+          let withPo = rows.filter(r => r.order.po1 || r.order.po2).length;
+          info = `<span class="badge ${withPo && withPo >= rows.length ? 'bg-success' : 'badge-soft-muted'}">${withPo}/${rows.length} with PO / Jobwork</span>`;
+        }
+        return `<div class="up-sec up-sec-files">
+            <div class="d-flex gap-1 mb-1">
+              <button type="button" class="btn btn-sm btn-view-compact flex-fill btn-primary" onclick="openYDAstraAssembly('${proj.id}', ${idx})"><i class="fa fa-arrow-right me-1"></i>Open (${rows.length} components)</button>
+              <button type="button" class="btn btn-sm btn-view-compact btn-outline-secondary" title="Progress and history" onclick="openYDAstraAssemblyDetailsModal('${proj.id}', ${idx})"><i class="fa fa-clock-rotate-left"></i></button>
+            </div>
+            <div class="d-flex flex-wrap gap-1">${info}</div>
+          </div>`;
+      }
+
+      // sections → groups { idx, sr, kids[] }; a dotted SR belongs to the
+      // whole-number row above it, as on the Drawings page
+      function asmSections(proj) {
+        let loe = proj.loeData || [], out = [], cur = { title: null, groups: [] }, last = null, sheet = null;
+        let multiSheet = new Set(loe.map(lr => lr.sheetName || '')).size > 1;
+        const flush = () => { if (cur.title || cur.groups.length) out.push(cur); };
+        loe.forEach((lr, idx) => {
+          let sr = String(lr.srNo || '').trim();
+          if (multiSheet && (lr.sheetName || '') !== sheet) {
+            sheet = lr.sheetName || '';
+            flush(); cur = { title: sheet || 'Sheet', groups: [] }; last = null;
+          }
+          if (isDivider(lr)) {
+            let t = lr.assemblyName || lr.section || sr;
+            if (!t) return;
+            if (cur.groups.length) { flush(); cur = { title: t, groups: [] }; }
+            else cur.title = cur.title ? cur.title + ' · ' + t : t;
+            last = null;
+            return;
+          }
+          if (sr.includes('.') && last && sr.split('.')[0] === last.sr) last.kids.push(idx);
+          else { last = { idx: idx, sr: sr.split('.')[0], kids: [] }; cur.groups.push(last); }
+        });
+        flush();
+        return out;
+      }
+
+      function rowMatch(proj, idx) {
+        let lr = proj.loeData[idx], st = stageInfo(lr), c = YV.col;
+        let f = { sr: lr.srNo, name: lr.assemblyName, doc: lr.drawingNo, qty: lr.qty, week: lr.dispatchWeek, status: st.text };
+        if (YV.q && ![f.sr, f.name, f.doc, f.week, lr.section, st.text].join(' ').toLowerCase().includes(YV.q)) return false;
+        for (let k in c) if (c[k] && !String(f[k] == null ? '' : f[k]).toLowerCase().includes(c[k])) return false;
+        if (YV.show && st.s !== YV.show) return false;
+        return true;
+      }
+
+      function sortVal(proj, idx) {
+        let lr = proj.loeData[idx];
+        switch (YV.sortKey) {
+          case 'name': return lr.assemblyName || '';
+          case 'doc': return lr.drawingNo || '';
+          case 'qty': return String(lr.qty || '');
+          case 'week': return w.parseWeekValue ? String(w.parseWeekValue(lr.dispatchWeek || '')).padStart(12, '0') : (lr.dispatchWeek || '');
+          case 'status': return ['noBom', 'draft', 'codesSent', 'bomSubmitted'].indexOf(procStatus(lr)) + '';
+          default: return String(lr.srNo || '');
+        }
+      }
+
+      function asmRow(proj, idx, o) {
+        let lr = proj.loeData[idx], st = stageInfo(lr);
+        let whole = /^\d+$/.test(String(lr.srNo || '').trim()) ? ' sr-whole-row' : '';
+        let cls = o.parent ? 'parent-row' + whole : `child-row ydc-child-of-${o.key}${o.open ? '' : ' d-none'}`;
+        let chev = o.parent ? `<span class="toggle-chevron${o.hasKids ? '' : ' invisible'}${o.open ? ' open' : ''}" onclick="event.stopPropagation(); toggleYdcRow(${idx})"><i class="fa fa-chevron-right"></i></span>` : '';
+        let kids = o.parent ? o.kids : [];
+        let status = !hasBom(lr) && kids.length ? parentStatus(proj, kids) : st.badge;
+        return `<tr class="${cls}" data-ydc-idx="${idx}">
+            <td>${chev}${esc(lr.srNo || '')}</td>
+            <td><div class="fw-semibold">${esc(lr.assemblyName || '')}</div><div class="text-muted small">${esc(lr.section || '')}</div></td>
+            <td><code class="small">${esc(lr.drawingNo || '')}</code></td>
+            <td>${esc(lr.qty || '')}</td>
+            <td>${esc(lr.dispatchWeek || '')}</td>
+            <td>${status}</td>
+            <td class="upload-cell">${procCell(proj, idx, kids)}</td>
+          </tr>`;
+      }
+
+      function renderAsmGrid(proj) {
+        let loe = proj.loeData || [];
+        let real = loe.map((lr, i) => i).filter(i => !isDivider(loe[i]));
+        let n = st => real.filter(i => procStatus(loe[i]) === st).length;
+        $('#ydcStats').html(`
+          <div class="stat"><span class="label">Total Assemblies</span><span class="value">${real.length}</span></div>
+          <div class="stat"><span class="label">BOM Uploaded</span><span class="value text-success">${real.length - n('noBom')}</span></div>
+          <div class="stat"><span class="label">Stage 1 · BOM to SAP</span><span class="value text-warning">${n('draft')}</span></div>
+          <div class="stat"><span class="label">Stage 2 · SAP Check</span><span class="value text-info">${n('codesSent')}</span></div>
+          <div class="stat"><span class="label">Stage 3 · Ordering</span><span class="value text-primary">${n('bomSubmitted')}</span></div>`);
+        if (!loe.length) {
+          $('#ydcAssemblyGrid').html('<div class="alert alert-warning"><i class="fa fa-exclamation-triangle me-2"></i>No assemblies found in LOE data.</div>');
+          return;
+        }
+        if (!document.getElementById('ydcAssemblyGridTable')) {
+          const th = (k, label, wd) => `<th class="sortable" data-ydc-sort="${k}"${wd ? ` style="width: ${wd}px"` : ''}>${label}</th>`;
+          const cf = (k, ph) => `<th><input type="text" class="form-control form-control-sm ydc-col-filter" data-filter-key="${k}" placeholder="${ph}" /></th>`;
+          $('#ydcAssemblyGrid').html(`
+            <div class="table-wrap">
+              <div class="table-responsive">
+                <table class="table table-bordered assemblies mb-0" id="ydcAssemblyGridTable">
+                  <thead>
+                    <tr>${th('sr', 'SR', 60)}${th('name', 'Assembly')}${th('doc', 'Doc No')}${th('qty', 'Qty', 70)}${th('week', 'Dispatch Week')}${th('status', 'Status', 150)}<th class="upload-cell">Procurement</th></tr>
+                    <tr class="column-filter-row">${cf('sr', 'SR')}${cf('name', 'Assembly')}${cf('doc', 'Doc No')}${cf('qty', 'Qty')}${cf('week', 'Dispatch Week')}${cf('status', 'Status')}<th></th></tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>`);
+        }
+        let filtering = !!(YV.q || YV.show || Object.values(YV.col).some(Boolean));
+        let body = [];
+        asmSections(proj).forEach(sec => {
+          let groups = sec.groups.map(g => ({ g: g, self: rowMatch(proj, g.idx), kids: g.kids.filter(k => !filtering || rowMatch(proj, k)) }))
+            .filter(x => !filtering || x.self || x.kids.length);
+          if (YV.sortKey) {
+            const by = (a, b) => YV.sortDir * collate(sortVal(proj, a), sortVal(proj, b));
+            groups.sort((a, b) => by(a.g.idx, b.g.idx));
+            groups.forEach(x => x.kids.sort(by));
+          }
+          if (!groups.length) return;
+          if (sec.title) body.push(`<tr class="section-divider"><td colspan="7">${esc(sec.title)}</td></tr>`);
+          groups.forEach(x => {
+            let open = YV.open.has(x.g.idx) || (filtering && x.kids.length > 0);
+            body.push(asmRow(proj, x.g.idx, { parent: true, hasKids: x.kids.length > 0, open: open, kids: x.g.kids }));
+            x.kids.forEach(k => body.push(asmRow(proj, k, { parent: false, key: x.g.idx, open: open })));
+          });
+        });
+        $('#ydcAssemblyGridTable tbody').html(body.length ? body.join('') : '<tr><td colspan="7" class="text-center text-muted py-4">No assembly matches the current filter.</td></tr>');
+        $('#ydcAssemblyGridTable th.sortable').each(function () {
+          $(this).toggleClass('sort-asc', this.dataset.ydcSort === YV.sortKey && YV.sortDir === 1)
+            .toggleClass('sort-desc', this.dataset.ydcSort === YV.sortKey && YV.sortDir === -1);
+        });
+      }
+
+      function redrawGrid() { let p = getP(w._ydcState.projId); if (p) renderAsmGrid(p); }
+
+      w.toggleYdcRow = function (idx) {
+        idx = +idx;
+        if (YV.open.has(idx)) YV.open.delete(idx); else YV.open.add(idx);
+        let open = YV.open.has(idx);
+        $('#ydcAssemblyGridTable tr.ydc-child-of-' + idx).toggleClass('d-none', !open);
+        $(`#ydcAssemblyGridTable tr[data-ydc-idx="${idx}"] .toggle-chevron`).toggleClass('open', open);
+      };
+
+      // expand / collapse every group
+      w.toggleAllYdcRows = function () {
+        let parents = $('#ydcAssemblyGridTable tr.parent-row').map(function () { return +this.dataset.ydcIdx; }).get();
+        let expand = parents.some(i => !YV.open.has(i));
+        parents.forEach(i => { if (expand) YV.open.add(i); else YV.open.delete(i); });
+        redrawGrid();
+      };
+
+      w.filterYdcTable = function () {
+        YV.q = String($('#ydcSearchInput').val() || '').toLowerCase().trim();
+        YV.show = $('#ydcShowFilter').val() || '';
+        redrawGrid();
+      };
+
+      $(document).on('input', '#ydcAssemblyGridTable .ydc-col-filter', function () {
+        YV.col[this.dataset.filterKey] = this.value.toLowerCase().trim();
+        redrawGrid();
+      });
+      $(document).on('click', '#ydcAssemblyGridTable th.sortable', function () {
+        let k = this.dataset.ydcSort;
+        if (YV.sortKey === k) YV.sortDir = -YV.sortDir; else { YV.sortKey = k; YV.sortDir = 1; }
+        redrawGrid();
+      });
+      $(document).on('click', '#ydcAssemblyGridTable tr.parent-row', function (e) {
+        if (e.target.closest('button, a, input, .toggle-chevron')) return;
+        let chev = this.querySelector('.toggle-chevron:not(.invisible)');
+        if (chev) chev.click();
+      });
+
+      // ---- Progress & history modal ----
+      w.openYDAstraAssemblyDetailsModal = function (projId, loeIdx) {
+        let proj = getP(projId);
+        let lr = proj && proj.loeData && proj.loeData[loeIdx];
+        if (!lr) return;
+        $('#ydcAsmDetName').text(lr.assemblyName || 'Assembly');
+        let id = hasBom(lr) ? ids(proj, lr) : {};
+        $('#ydcAsmDetMeta').html(`
+          <strong>Drawing No:</strong> ${esc(lr.drawingNo || '—')} &nbsp;|&nbsp;
+          <strong>WBS:</strong> ${esc(id.wbs || '—')} &nbsp;|&nbsp;
+          <strong>YF Code:</strong> ${esc(id.yfCode || '—')} &nbsp;|&nbsp;
+          <strong>Dispatch Week:</strong> ${esc(lr.dispatchWeek || '—')}`);
+
+        let s = procStatus(lr);
+        let reached = { noBom: -1, draft: 0, codesSent: 1, bomSubmitted: 2 }[s];
+        $('#ydcAssemblyStepper').html(STAGES.map((st, i) => {
+          let cls = i < reached ? 'completed' : i === reached ? 'active' : '';
+          let icon = i < reached ? '<i class="fa fa-check"></i>' : i === reached ? '<i class="fa fa-circle-dot"></i>' : '<i class="fa fa-circle-notch opacity-25"></i>';
+          return `<div class="stepper-item ${cls}"><div class="step-counter">${icon}</div><div class="step-name">${st.label}</div></div>`;
+        }).join(''));
+
+        let history = (proj.ydcHistory || []).filter(h => h.loeIdx === loeIdx).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        $('#ydcAssemblyHistoryList').html(history.length ? history.map(h => `
+          <li class="list-group-item d-flex justify-content-between align-items-start py-2">
+            <div class="ms-2 me-auto"><div class="fw-bold">${esc(h.action)}</div><span class="text-muted small">By ${esc(h.user || 'System')}</span></div>
+            <span class="badge bg-light text-dark border">${new Date(h.timestamp).toLocaleString()}</span>
+          </li>`).join('') : '<li class="list-group-item text-muted text-center py-3">No history events logged yet.</li>');
+        $('#ydcAssemblyDetailsModal').modal('show');
+      };
+
+      // ================================================================
+      // VIEW 2: assembly workspace (3 stages)
+      // ================================================================
+      w.openYDAstraAssembly = function (projId, loeIdx) {
+        let proj = getP(projId);
+        let lr = proj && proj.loeData && proj.loeData[loeIdx];
+        if (!lr) return;
+        ensureProc(proj, lr);
+        w._ydcState.projId = projId;
+        w._ydcState.loeIdx = loeIdx;
+        w._ydcState.stage = defaultStage(lr);
+
+        hideAllYDC();
+        $('#ydcAssemblyView').fadeIn(200);
+        $('#ydcAsmTitle').html('<i class="fa fa-cubes me-2"></i>' + esc(lr.assemblyName || 'Assembly'));
+        $('#ydcAsmMeta').text(`Project: ${proj.projNo || 'TBD'} - ${proj.client || ''} · SR ${lr.srNo || '—'} · Doc No ${lr.drawingNo || '—'}`);
+        renderAssembly();
+      };
+
+      function current() {
+        let proj = getP(w._ydcState.projId);
+        let lr = proj && proj.loeData && proj.loeData[w._ydcState.loeIdx];
+        return lr ? { proj: proj, lr: lr, loeIdx: w._ydcState.loeIdx, pr: ensureProc(proj, lr) } : null;
+      }
+
+      function rerender() {
+        if ($('#ydcAssemblyView').is(':visible') && current()) renderAssembly();
+        else if ($('#ydcProjectSummary').is(':visible') && getP(w._ydcState.projId)) w.openYDAstraProject(w._ydcState.projId);
+      }
+
+      w.switchYdcAssemblyStage = function (stage) {
+        let c = current(); if (!c) return;
+        let s = c.pr.status;
+        if (stage === 'sapCheck' && s === 'draft') return Swal.fire('Stage locked', 'Send the new codes to the SAP team (Stage 1) first.', 'warning');
+        if (stage === 'ordering' && s !== 'bomSubmitted') return Swal.fire('Stage locked', 'Submit the BOM to SAP first (after the SAP team has created any new codes).', 'warning');
+        w._ydcState.stage = stage;
+        renderAssembly();
+      };
+
+      function renderAssembly() {
+        let c = current(); if (!c) return;
+        let { proj, lr, pr } = c;
+        let s = pr.status, stage = w._ydcState.stage;
+        let rows = resolveRows(proj, c.loeIdx);
+
+        let reached = { draft: 0, codesSent: 1, bomSubmitted: 2 }[s];
+        let cnt = { green: 0, yellow: 0, red: 0 };
+        rows.forEach(r => cnt[r.level]++);
+        let statusText = s === 'draft' ? 'PM to check codes' : s === 'codesSent' ? 'With ' + SAP_TEAM
+          : 'BOM submitted to SAP' + (pr.submittedAt ? ' · ' + new Date(pr.submittedAt).toLocaleDateString('en-IN') : '');
+        let tabs = STAGES.map((st, i) => {
+          let locked = i > reached, done = i < reached, on = stage === st.key;
+          return `<button type="button" class="btn btn-sm ${on ? 'btn-primary' : 'btn-outline-primary'}${locked ? ' disabled' : ''}" onclick="switchYdcAssemblyStage('${st.key}')"><i class="fa ${locked ? 'fa-lock' : done ? 'fa-circle-check' : 'fa-file-lines'} me-1"></i>${i + 1} · ${st.label}</button>`;
+        }).join('');
+
+        let html = `
+          <div class="stats-strip">
+            <div class="stat"><span class="label">Components</span><span class="value">${rows.length}</span></div>
+            <div class="stat"><span class="label">In SAP library</span><span class="value text-success">${cnt.green}</span></div>
+            <div class="stat"><span class="label">New / check</span><span class="value text-warning">${cnt.yellow}</span></div>
+            <div class="stat"><span class="label">No code yet</span><span class="value text-danger">${cnt.red}</span></div>
+            <div class="stat"><span class="label">Status</span><span class="value">${esc(statusText)}</span></div>
+          </div>
+          <div class="sheet-tabs">${tabs}</div>`;
+
+        if (s !== 'draft' && pr.sentSig && pr.sentSig !== bomSig(rows)) {
+          html += `<div class="alert alert-warning py-2 d-flex justify-content-between align-items-center">
+                     <span><i class="fa fa-code-branch me-2"></i>Design has revised this BOM since it was sent. Re-open Stage 1 to check the changed rows.</span>
+                     <button class="btn btn-sm btn-warning fw-bold" onclick="ydcReopen()">Re-open Stage 1</button>
+                   </div>`;
+        }
+
+        html += idStrip(proj, lr, s === 'draft');
+        if (stage === 'sap') html += stage1Html(c, rows);
+        else if (stage === 'sapCheck') html += stage2Html(c, rows);
+        else html += stage3Html(c, rows);
+
+        let scroll = $('#ydcExcelTable').parent().scrollLeft();
+        $('#ydcAssemblyComponentsExcelView').html(html);
+        $('#ydcExcelTable').parent().scrollLeft(scroll || 0);
+        initYDCColumnResizers();
+      }
+
+      // ---- YF code / YF description / WBS element strip ----
+      function idStrip(proj, lr, editable) {
+        let id = ids(proj, lr);
+        let yfHit = libGet(id.yfCode);
+        let yfLevel = !id.yfCode ? 'red' : yfHit && !yfHit.deleted ? 'green' : 'yellow';
+        let yfWhy = !id.yfCode ? 'No assembly drawing number found' : yfHit ? 'In SAP library' : 'New YF code — SAP team to create';
+        let dis = editable ? '' : 'disabled';
+        return `
+          <div class="ydc-idstrip mb-3">
+            <div class="ydc-idbox ydc-c-${yfLevel}" title="${esc(yfWhy)}">
+              <label>YF CODE</label>
+              <input class="form-control form-control-sm fw-semibold text-primary" maxlength="${MAX_CODE}" value="${esc(id.yfCode)}" ${dis} onchange="ydcSetId('yfCode', this.value)">
+            </div>
+            <div class="ydc-idbox flex-grow-1">
+              <label>YF DESCRIPTION</label>
+              <input class="form-control form-control-sm" maxlength="${MAX_DESC}" value="${esc(id.yfDesc)}" ${dis} onchange="ydcSetId('yfDesc', this.value)">
+            </div>
+            <div class="ydc-idbox">
+              <label>WBS ELEMENT</label>
+              <input class="form-control form-control-sm fw-semibold" value="${esc(id.wbs)}" ${dis} onchange="ydcSetId('wbs', this.value)">
+            </div>
+            <div class="ms-auto align-self-end text-end">${libraryBadgeHtml()}
+              <div><label class="btn btn-link btn-sm p-0 small">Update SAP library<input type="file" accept=".xlsx,.xls" hidden onchange="ydcUploadLibrary(this)"></label></div>
+            </div>
+          </div>`;
+      }
+
+      w.ydcSetId = async function (field, value) {
+        let c = current(); if (!c) return;
+        let v = clean(value);
+        if (field !== 'yfDesc') v = v.toUpperCase();
+        c.pr[field] = v === autoIds(c.proj, c.lr)[field] ? '' : v;
+        await YDStore.saveProjects();
+        renderAssembly();
+      };
+
+      const legend = `<div class="ydc-legend"><span><i class="ydc-dot g"></i>In SAP library</span><span><i class="ydc-dot y"></i>New code / please check</span><span><i class="ydc-dot r"></i>No code yet — please fill</span></div>`;
+
+      // ---- Stage 1: BOM to SAP ----
+      function stage1Html(c, rows) {
+        let draft = c.pr.status === 'draft';
+        let id = ids(c.proj, c.lr);
+        let dis = draft ? '' : 'disabled';
+
+        let html = `
+          <div class="filter-row justify-content-between">
+            ${legend}
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              ${draft ? `<button class="btn btn-primary btn-sm fw-bold" onclick="ydcSave()"><i class="fa fa-save me-1"></i>Save</button>` : ''}
+              <button class="btn btn-outline-primary btn-sm fw-bold" onclick="copyYDCExcelTable()"><i class="fa fa-copy me-1"></i>Copy</button>
+              <button class="btn btn-outline-success btn-sm fw-bold" onclick="exportYDCExcelTable()"><i class="fa fa-file-excel me-1"></i>Export</button>
+              <span id="ydcSendSlot">${sendButton(c, rows)}</span>
+            </div>
+          </div>
+          <div class="table-wrap"><div class="table-responsive">
+            <table class="table table-bordered text-nowrap assemblies mb-0 ydc-codes" id="ydcExcelTable">
+              <thead><tr>
+                <th style="width: 40px;" class="text-center">#</th>
+                <th>YF CODE</th><th>WBS ELEMENT</th>
+                <th style="min-width: 235px;">YSCODE</th><th style="min-width: 330px;">YSDESCRIPTION</th>
+                <th>PART / DRAWING NO.</th><th>COMPONENT NAME</th>
+                <th class="text-center">QTY</th><th>MATERIAL</th><th class="text-center">WEIGHT</th>
+              </tr></thead><tbody>`;
+        if (!rows.length) html += `<tr><td colspan="10" class="text-center py-4 text-muted">No components in this BOM.</td></tr>`;
+        rows.forEach((r, n) => {
+          html += `
+            <tr class="ydc-excel-row ydc-c-${r.level}" title="${esc(r.why)}">
+              <td class="text-center text-muted fw-bold">${n + 1}</td>
+              <td class="text-muted">${esc(id.yfCode)}</td>
+              <td class="text-muted">${esc(id.wbs)}</td>
+              <td><input class="form-control form-control-sm border-0 bg-transparent fw-semibold text-primary ydc-in" data-key="${esc(r.key)}" data-f="ysCode" maxlength="${MAX_CODE + 4}" value="${esc(r.code)}" ${dis}></td>
+              <td><input class="form-control form-control-sm border-0 bg-transparent fw-semibold text-dark ydc-in" data-key="${esc(r.key)}" data-f="ysDesc" maxlength="${MAX_DESC + 10}" value="${esc(r.desc)}" ${dis}></td>
+              <td>${esc(r.partNo)}</td>
+              <td>${esc(r.name)}</td>
+              <td class="text-center">${esc(r.qty)}</td>
+              <td>${esc(r.material)}</td>
+              <td class="text-center">${esc(r.weight)}</td>
+            </tr>`;
+        });
+        return html + `</tbody></table></div></div>`;
+      }
+
+      function sendButton(c, rows) {
+        if (c.pr.status !== 'draft') return '';
+        let n = collectNewCodes(c.proj, c.lr, rows).length;
+        return n
+          ? `<button class="btn btn-info btn-sm fw-bold text-white shadow-sm" onclick="ydcSendNewCodes()"><i class="fa fa-paper-plane me-1"></i>Send ${n} new code${n > 1 ? 's' : ''} to SAP Team</button>`
+          : `<button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="ydcSubmitBom()"><i class="fa fa-check-circle me-1"></i>Submit BOM to SAP</button>`;
+      }
+
+      // Refresh colours / values of the Stage 1 grid without re-drawing it,
+      // so focus and tab order survive while the PM types.
+      function refreshStage1InPlace(c) {
+        let rows = resolveRows(c.proj, c.loeIdx);
+        rows.forEach(r => {
+          let inputs = $('#ydcExcelTable .ydc-in').filter(function () { return $(this).data('key') === r.key; });
+          if (!inputs.length) return;
+          inputs.closest('tr').attr('class', 'ydc-excel-row ydc-c-' + r.level).attr('title', r.why);
+          inputs.each(function () {
+            if (this === document.activeElement) return;
+            $(this).val($(this).data('f') === 'ysCode' ? r.code : r.desc);
+          });
+        });
+        $('#ydcSendSlot').html(sendButton(c, rows));
+      }
+
+      // PM edits a code / description. A code typed for a standard part is
+      // remembered, so the same BOM line fills itself on the next project.
+      $(document).on('change', '#ydcExcelTable .ydc-in', async function () {
+        let c = current(); if (!c || c.pr.status !== 'draft') return;
+        let key = $(this).data('key'), f = $(this).data('f');
+        let v = clean($(this).val());
+        if (f === 'ysCode') v = v.toUpperCase();
+        let r = bomRows(c.lr).find(x => x.key === key); if (!r) return;
+        let auto = autoCode(r);
+        let o = c.pr.rows[key] = c.pr.rows[key] || {};
+        let autoVal = f === 'ysCode' ? auto.code : auto.desc;
+        if (v === autoVal) delete o[f]; else o[f] = v;
+        if (f === 'ysCode' && v && !YDC_STD.isProjectDrawingNo(r.partNo)) {
+          let hit = libGet(v);
+          MEMORY[memKey(r.partNo, r.name)] = { code: v, desc: o.ysDesc || (hit ? hit.desc : auto.desc) };
+          YDStore.saveMemory(MEMORY);
+        }
+        refreshStage1InPlace(c);
+        await YDStore.saveProjects();
+      });
+
+      // Paste a column from Excel: fills this cell and the ones below
+      $(document).on('paste', '#ydcExcelTable .ydc-in', function (e) {
+        let text = (e.originalEvent.clipboardData || w.clipboardData).getData('Text') || '';
+        let lines = text.split(/\r\n|\n|\r/).filter((x, i, a) => !(i === a.length - 1 && x === ''));
+        if (lines.length <= 1 && text.indexOf('\t') < 0) return;
+        e.preventDefault();
+        let f = $(this).data('f');
+        let inputs = $('#ydcExcelTable .ydc-in[data-f="' + f + '"]');
+        let start = inputs.index(this);
+        lines.forEach((line, i) => {
+          let inp = inputs.eq(start + i);
+          if (inp.length) inp.val(line.split('\t')[0]).trigger('change');
+        });
+      });
+
+      w.ydcSave = async function () {
+        await YDStore.saveProjects();
+        toast('Saved');
+      };
+
+      function validateForSend(c, rows) {
+        let id = ids(c.proj, c.lr);
+        let problems = [];
+        if (!id.yfCode) problems.push('YF code is missing');
+        if (!id.wbs) problems.push('WBS element is missing');
+        rows.filter(r => r.level === 'red').slice(0, 10).forEach(r => problems.push('Row ' + (r.i + 1) + ' (' + (r.name || r.partNo) + '): ' + r.why));
+        if (!LIB.count) problems.push('SAP library is not loaded — upload the latest Products export first');
+        return problems;
+      }
+
+      function writeWorkbook(sheets, fileName) {
+        let wb = XLSX.utils.book_new();
+        sheets.forEach(s => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s.rows), s.name));
+        XLSX.writeFile(wb, fileName);
+      }
+
+      function requestFile(c, list) {
+        let id = ids(c.proj, c.lr);
+        let rows = [['TYPE', 'CODE', 'DESCRIPTION', 'WBS ELEMENT', 'YF CODE', 'PROJECT', 'ASSEMBLY SR', 'ASSEMBLY']];
+        list.forEach(x => rows.push([x.kind, x.code, x.desc, id.wbs, id.yfCode, c.proj.projNo || '', c.lr.srNo || '', c.lr.assemblyName || '']));
+        writeWorkbook([{ name: 'New codes', rows: rows }], `New_SAP_Codes_${c.proj.projNo || 'TBD'}_${id.wbs || 'SR' + c.lr.srNo}_${today()}.xlsx`);
+      }
+
+      w.ydcSendNewCodes = async function () {
+        let c = current(); if (!c) return;
+        let rows = resolveRows(c.proj, c.loeIdx);
+        let problems = validateForSend(c, rows);
+        if (problems.length) return Swal.fire({ icon: 'warning', title: 'Fix these first', html: '<ul class="text-start small mb-0">' + problems.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' });
+        let list = collectNewCodes(c.proj, c.lr, rows);
+        let ok = await Swal.fire({
+          icon: 'question', title: 'Send ' + list.length + ' new code' + (list.length > 1 ? 's' : '') + '?',
+          html: `Only codes that are not yet in the SAP library go to <b>${SAP_TEAM}</b>.<br>A request file will download for them.`,
+          showCancelButton: true, confirmButtonText: 'Send'
+        });
+        if (!ok.isConfirmed) return;
+        c.pr.newCodes = list;
+        c.pr.status = 'codesSent';
+        c.pr.sentAt = new Date().toISOString();
+        c.pr.sentSig = bomSig(rows);
+        logHistory(c.proj, c.loeIdx, list.length + ' new code(s) sent to ' + SAP_TEAM);
+        await YDStore.saveProjects();
+        requestFile(c, list);
+        w._ydcState.stage = 'sapCheck';
+        renderAssembly();
+      };
+
+      // Final step of the code work: the whole BOM, with YF / WBS, for SAP
+      w.ydcSubmitBom = async function () {
+        let c = current(); if (!c) return;
+        let rows = resolveRows(c.proj, c.loeIdx);
+        if (c.pr.status === 'draft') {
+          let problems = validateForSend(c, rows);
+          if (problems.length) return Swal.fire({ icon: 'warning', title: 'Fix these first', html: '<ul class="text-start small mb-0">' + problems.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' });
+        } else if ((c.pr.newCodes || []).some(x => !x.created)) {
+          return Swal.fire('Waiting for SAP team', 'All new codes must be created in SAP before the BOM can be submitted.', 'warning');
+        }
+        let shared = rows.filter(r => r.requestedWith && !r.inLib);
+        if (shared.length) {
+          return Swal.fire('Waiting for SAP team', shared.length + ' code(s) here were requested with SR ' + Array.from(new Set(shared.map(r => r.requestedWith.sr))).join(', ') + ' and are not created yet.', 'warning');
+        }
+        let ok = await Swal.fire({ icon: 'question', title: 'Submit BOM to SAP?', text: 'Codes are locked after this and Ordering opens.', showCancelButton: true, confirmButtonText: 'Submit' });
+        if (!ok.isConfirmed) return;
+        let id = ids(c.proj, c.lr);
+        let sheet = [['YF CODE', 'YF DESCRIPTION', 'WBS ELEMENT', 'YSCODE', 'YSDESCRIPTION', 'QTY', 'MATERIAL', 'WEIGHT', 'PART / DRAWING NO.']];
+        rows.forEach(r => sheet.push([id.yfCode, id.yfDesc, id.wbs, r.code, r.desc, r.qty, r.material, r.weight, r.partNo]));
+        writeWorkbook([{ name: 'BOM to SAP', rows: sheet }], `BOM_to_SAP_${c.proj.projNo || 'TBD'}_${id.wbs || 'SR' + c.lr.srNo}_${today()}.xlsx`);
+        c.pr.status = 'bomSubmitted';
+        c.pr.submittedAt = new Date().toISOString();
+        if (!c.pr.sentSig) c.pr.sentSig = bomSig(rows);
+        logHistory(c.proj, c.loeIdx, 'BOM submitted to SAP (' + rows.length + ' components). Ordering opened.');
+        await YDStore.saveProjects();
+        w._ydcState.stage = 'ordering';
+        renderAssembly();
+      };
+
+      w.ydcReopen = async function () {
+        let c = current(); if (!c) return;
+        let ok = await Swal.fire({ icon: 'warning', title: 'Re-open Stage 1?', text: 'Codes become editable again. PO / Jobwork entries are kept.', showCancelButton: true, confirmButtonText: 'Re-open' });
+        if (!ok.isConfirmed) return;
+        c.pr.status = 'draft';
+        c.pr.sentSig = '';
+        logHistory(c.proj, c.loeIdx, 'Stage 1 re-opened');
+        await YDStore.saveProjects();
+        w._ydcState.stage = 'sap';
+        renderAssembly();
+      };
+
+      // ---- Stage 2: SAP Check ----
+      function stage2Html(c, rows) {
+        let list = c.pr.newCodes || [];
+        // a code that has appeared in a fresh library upload counts as created
+        let found = list.filter(x => !x.created && libGet(x.code) && !libGet(x.code).created);
+        found.forEach(x => { x.created = true; x.createdAt = LIB.loadedAt; });
+        if (found.length) {
+          logHistory(c.proj, c.loeIdx, found.length + ' new code(s) found in the updated SAP library');
+          YDStore.saveProjects();
+        }
+        let open = c.pr.status === 'codesSent';
+        let done = list.filter(x => x.created).length;
+        let all = done === list.length;
+        let html = `
+          <div class="filter-row justify-content-between">
+            <div>
+              <small class="text-muted">${list.length ? `${SAP_TEAM} creates these codes in SAP and ticks each one. ${done} of ${list.length} created.` : 'Every code was already in SAP — nothing to create.'}</small>
+            </div>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              ${list.length ? `<button class="btn btn-outline-primary btn-sm fw-bold" onclick="ydcDownloadRequest()"><i class="fa fa-download me-1"></i>Request file</button>` : ''}
+              ${open && !all ? `<button class="btn btn-outline-success btn-sm fw-bold" onclick="ydcMarkCreated(-1)"><i class="fa fa-check-double me-1"></i>Mark all created</button>` : ''}
+              ${open ? `<button class="btn btn-success btn-sm fw-bold shadow-sm" ${all ? '' : 'disabled'} onclick="ydcSubmitBom()"><i class="fa fa-check-circle me-1"></i>Submit BOM to SAP</button>
+                        <button class="btn btn-link btn-sm text-muted" onclick="ydcReopen()">Re-open Stage 1</button>` : ''}
+            </div>
+          </div>
+          <div class="table-wrap"><div class="table-responsive">
+            <table class="table table-bordered text-nowrap assemblies mb-0" id="ydcExcelTable">
+              <thead><tr>
+                <th class="text-center" style="width:40px;">#</th><th>TYPE</th><th>CODE</th><th>DESCRIPTION</th><th>USED FOR</th>
+                <th class="text-center" style="width:150px;">CREATED IN SAP</th>
+              </tr></thead><tbody>`;
+        if (!list.length) html += `<tr><td colspan="6" class="text-center py-4 text-muted">No new codes were needed for this BOM.</td></tr>`;
+        list.forEach((x, i) => {
+          let r = rows.find(y => y.key === x.rowKey);
+          html += `
+            <tr class="ydc-excel-row ydc-c-${x.created ? 'green' : 'yellow'}">
+              <td class="text-center text-muted fw-bold">${i + 1}</td>
+              <td>${esc(x.kind)}</td>
+              <td class="fw-semibold text-primary">${esc(x.code)}</td>
+              <td>${esc(x.desc)}</td>
+              <td class="text-muted">${x.kind === 'YF' ? 'Assembly' : esc(r ? (r.partNo + ' · ' + r.name) : '')}</td>
+              <td class="text-center">${x.created
+                ? '<span class="text-success fw-semibold"><i class="fa fa-check me-1"></i>Created</span>'
+                : open ? `<button class="btn btn-sm btn-outline-success py-0" onclick="ydcMarkCreated(${i})">Mark created</button>` : '—'}</td>
+            </tr>`;
+        });
+        return html + `</tbody></table></div></div>`;
+      }
+
+      w.ydcDownloadRequest = function () {
+        let c = current(); if (c) requestFile(c, c.pr.newCodes || []);
+      };
+
+      w.ydcMarkCreated = async function (i) {
+        let c = current(); if (!c) return;
+        let list = c.pr.newCodes || [];
+        let targets = i < 0 ? list.filter(x => !x.created) : [list[i]];
+        targets.forEach(x => { x.created = true; x.createdAt = new Date().toISOString(); });
+        await addCreatedToLibrary(targets);
+        logHistory(c.proj, c.loeIdx, targets.length + ' code(s) created in SAP', SAP_TEAM);
+        if (list.every(x => x.created)) logHistory(c.proj, c.loeIdx, 'All new codes created — PM can submit the BOM', SAP_TEAM);
+        await YDStore.saveProjects();
+        renderAssembly();
+      };
+
+      // ---- Stage 3: Ordering ----
+      const ORDER_FIELDS = ['po1', 'po2', 'vendor1', 'vendor2', 'price1', 'price2', 'date1', 'date2', 'ready1', 'ready2'];
+
+      function stage3Html(c, rows) {
+        const pair = (r, f, type, ph, w) => `
+          <div class="d-flex flex-column gap-1" style="min-width: ${w}px;">
+            <input type="${type}" class="form-control form-control-sm py-0 px-1 border ydc-ord" data-key="${esc(r.key)}" data-f="${f}1" style="font-size: 0.72rem; height: 20px;" placeholder="${ph ? '1: ' + ph : ''}" value="${esc(r.order[f + '1'] || '')}">
+            <input type="${type}" class="form-control form-control-sm py-0 px-1 border ydc-ord" data-key="${esc(r.key)}" data-f="${f}2" style="font-size: 0.72rem; height: 20px;" placeholder="${ph ? '2: ' + ph : ''}" value="${esc(r.order[f + '2'] || '')}">
+          </div>`;
+        let html = `
+          <div class="filter-row justify-content-between">
+            <small class="text-muted">Two lines per component: PO / Jobwork, vendor or operator, price, PO date and tentative ready date.</small>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary btn-sm fw-bold" onclick="ydcSave()" title="Save"><i class="fa fa-save"></i></button>
+              <button class="btn btn-outline-primary btn-sm fw-bold" onclick="copyYDCExcelTable()" title="Copy"><i class="fa fa-copy"></i></button>
+              <button class="btn btn-outline-success btn-sm fw-bold" onclick="exportYDCExcelTable()" title="Export to Excel"><i class="fa fa-file-excel"></i></button>
+            </div>
+          </div>
+          <div class="table-wrap"><div class="table-responsive">
+            <table class="table table-bordered text-nowrap assemblies mb-0" id="ydcExcelTable">
+              <thead class="text-center"><tr>
+                <th style="width: 40px;">#</th><th>YSCODE</th><th>YSDESCRIPTION</th><th>QTY</th><th>MATERIAL</th><th>WEIGHT</th>
+                <th>PO / Jobwork</th><th>Vendor / Operator</th><th>Price</th><th>Date of PO / Jobwork Creation</th><th>Tentative Ready Date</th>
+              </tr></thead><tbody>`;
+        if (!rows.length) html += `<tr><td colspan="11" class="text-center py-4 text-muted">No components in this BOM.</td></tr>`;
+        rows.forEach((r, n) => {
+          html += `
+            <tr class="ydc-excel-row">
+              <td class="text-center text-muted fw-bold">${n + 1}</td>
+              <td class="fw-semibold text-primary">${esc(r.code)}</td>
+              <td class="fw-semibold text-dark" style="white-space: normal; max-width: 220px;">${esc(r.desc)}</td>
+              <td class="text-center">${esc(r.qty)}</td>
+              <td>${esc(r.material || '—')}</td>
+              <td class="text-center">${esc(r.weight)}</td>
+              <td>${pair(r, 'po', 'text', 'PO / Jobwork', 140)}</td>
+              <td>${pair(r, 'vendor', 'text', 'Vendor / Operator', 150)}</td>
+              <td>${pair(r, 'price', 'number', 'Price', 90)}</td>
+              <td>${pair(r, 'date', 'date', '', 120)}</td>
+              <td>${pair(r, 'ready', 'date', '', 120)}</td>
+            </tr>`;
+        });
+        return html + `</tbody></table></div></div>`;
+      }
+
+      $(document).on('change', '#ydcExcelTable .ydc-ord', async function () {
+        let c = current(); if (!c) return;
+        let key = $(this).data('key'), f = $(this).data('f');
+        let o = c.pr.rows[key] = c.pr.rows[key] || {};
+        let v = clean($(this).val());
+        if (v) o[f] = v; else delete o[f];
+        await YDStore.saveProjects();
+      });
+
+      // ---- Copy / Export (from data, not the DOM) ----
+      function stageTable() {
+        let c = current(); if (!c) return null;
+        let rows = resolveRows(c.proj, c.loeIdx);
+        let id = ids(c.proj, c.lr);
+        let stage = w._ydcState.stage;
+        if (stage === 'sapCheck') {
+          let t = [['TYPE', 'CODE', 'DESCRIPTION', 'CREATED IN SAP']];
+          (c.pr.newCodes || []).forEach(x => t.push([x.kind, x.code, x.desc, x.created ? 'YES' : 'NO']));
+          return { c: c, id: id, name: 'SAP Check', t: t };
+        }
+        if (stage === 'ordering') {
+          let t = [['YSCODE', 'YSDESCRIPTION', 'QTY', 'MATERIAL', 'WEIGHT', 'LINE', 'PO / JOBWORK', 'VENDOR / OPERATOR', 'PRICE', 'PO / JOBWORK DATE', 'TENTATIVE READY DATE']];
+          rows.forEach(r => [1, 2].forEach(n => t.push([r.code, r.desc, r.qty, r.material, r.weight, n, r.order['po' + n] || '', r.order['vendor' + n] || '', r.order['price' + n] || '', r.order['date' + n] || '', r.order['ready' + n] || ''])));
+          return { c: c, id: id, name: 'Ordering', t: t };
+        }
+        let label = { green: 'In SAP', yellow: 'New / check', red: 'Missing' };
+        let t = [['YF CODE', 'WBS ELEMENT', 'YSCODE', 'YSDESCRIPTION', 'PART / DRAWING NO.', 'COMPONENT NAME', 'QTY', 'MATERIAL', 'WEIGHT', 'STATUS']];
+        rows.forEach(r => t.push([id.yfCode, id.wbs, r.code, r.desc, r.partNo, r.name, r.qty, r.material, r.weight, label[r.level]]));
+        return { c: c, id: id, name: 'BOM to SAP', t: t };
+      }
+
+      w.copyYDCExcelTable = function () {
+        let s = stageTable(); if (!s) return;
+        navigator.clipboard.writeText(s.t.map(r => r.join('\t')).join('\n')).then(() => toast('Copied to clipboard'));
+      };
+
+      w.exportYDCExcelTable = function () {
+        let s = stageTable(); if (!s) return;
+        writeWorkbook([{ name: s.name, rows: s.t }], `YDAstra_${s.c.proj.projNo || 'TBD'}_${s.id.wbs || 'SR' + s.c.lr.srNo}_${s.name.replace(/\s+/g, '')}_${today()}.xlsx`);
+      };
+
+      // ---- Column resize + right-click menu (width / copy) ----
+      function initYDCColumnResizers() {
+        $('#ydcExcelTable thead th').each(function () {
+          if (!$(this).find('.ydc-col-resizer').length) $(this).append('<div class="ydc-col-resizer" title="Drag to adjust column width"></div>');
+        });
+      }
+
+      let _startX, _startWidth, _targetTh;
+      $(document).on('mousedown', '.ydc-col-resizer', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        _targetTh = $(this).closest('th');
+        _startX = e.pageX;
+        _startWidth = _targetTh.outerWidth();
+        $(this).addClass('resizing');
+        $(document).on('mousemove.ydcColResize', function (e) {
+          let width = Math.max(40, _startWidth + e.pageX - _startX);
+          _targetTh.css({ width: width + 'px', minWidth: width + 'px' });
+        });
+        $(document).on('mouseup.ydcColResize', function () {
+          $('.ydc-col-resizer').removeClass('resizing');
+          $(document).off('mousemove.ydcColResize mouseup.ydcColResize');
+        });
+      });
+
+      const cellText = cell => cell.find('input').length ? cell.find('input').map((i, x) => $(x).val()).get().join(' / ') : cell.text().trim();
+
+      w.setColumnWidth = function (colIdx) {
+        let th = $('#ydcExcelTable thead th').eq(colIdx);
+        Swal.fire({ title: 'Adjust Column Width', text: 'Column: ' + th.text().trim(), input: 'number', inputValue: th.outerWidth(), showCancelButton: true, confirmButtonText: 'Apply Width' })
+          .then(r => { let v = parseInt(r.value, 10); if (r.isConfirmed && v > 30) th.css({ width: v + 'px', minWidth: v + 'px' }); });
+      };
+
+      w.copyYDCColumn = function (colIdx) {
+        let vals = [$('#ydcExcelTable thead th').eq(colIdx).text().trim()];
+        $('#ydcExcelTable tbody tr.ydc-excel-row').each(function () { vals.push(cellText($(this).children('td').eq(colIdx))); });
+        navigator.clipboard.writeText(vals.join('\n')).then(() => toast('Column copied'));
+      };
+
+      w.copyYdcRowAt = function (rowIdx) {
+        let tr = $('#ydcExcelTable tbody tr.ydc-excel-row').eq(rowIdx);
+        navigator.clipboard.writeText(tr.children('td').map((i, td) => cellText($(td))).get().join('\t')).then(() => toast('Row copied'));
+      };
+
+      $(document).on('contextmenu', '#ydcExcelTable th, #ydcExcelTable td', function (e) {
+        e.preventDefault();
+        let th = $(e.target).closest('th'), tr = $(e.target).closest('tr.ydc-excel-row');
+        let menu = '';
+        if (th.length) {
+          menu = `<a class="dropdown-item" onclick="setColumnWidth(${th.index()})"><i class="fa fa-arrows-alt-h me-2 text-info"></i>Adjust Column Width...</a>
+                  <a class="dropdown-item" onclick="copyYDCColumn(${th.index()})"><i class="fa fa-copy me-2 text-primary"></i>Copy Column</a>`;
+        } else if (tr.length) {
+          menu = `<a class="dropdown-item" onclick="copyYdcRowAt(${tr.index('#ydcExcelTable tbody tr.ydc-excel-row')})"><i class="fa fa-copy me-2 text-primary"></i>Copy Row</a>`;
+        }
+        if (menu) $('#ydcContextMenu').html(menu).css({ display: 'block', left: e.pageX + 'px', top: e.pageY + 'px' });
+      });
+      $(document).on('click', function () { $('#ydcContextMenu').hide(); });
+
+      $(async function () { await initLibrary(); w.YDLive.start(); });
+    })(window);
+  </script>
+</body>
+
+</html>

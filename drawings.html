@@ -6,7 +6,7 @@
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
   <title>Assembly Drawings | YOGIJI DIGI</title>
   <link href="assets/img/yd-favicon.png" rel="icon" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
   <link href="assets/css/main.css" rel="stylesheet" />
@@ -607,7 +607,7 @@
       --bs-btn-active-border-color: #c69500;
     }
 
-    /* "Rejected" drawing / BOM requests list */
+    /* "Drawing / BOM requests" list (pending / approved / rejected) */
     .rj-tools {
       display: flex;
       gap: 8px;
@@ -670,6 +670,41 @@
     .rj-new {
       color: #9f1239;
       text-decoration: line-through;
+    }
+
+    /* Status tabs: own colours (main.css turns .btn-warning blue). */
+    .btn.fr-tab {
+      color: var(--fr-c);
+      border-color: var(--fr-c);
+      background: #fff;
+    }
+
+    .btn.fr-tab:hover,
+    .btn.fr-tab.active {
+      color: #fff;
+      background: var(--fr-c);
+      border-color: var(--fr-c);
+    }
+
+    .fr-tab-pending {
+      --fr-c: #b45309;
+    }
+
+    .fr-tab-approved {
+      --fr-c: #15803d;
+    }
+
+    .fr-tab-rejected {
+      --fr-c: #b91c1c;
+    }
+
+    /* New files: approved = now live, pending = waiting on a decision */
+    .rj-new-ok {
+      color: #15803d;
+    }
+
+    .rj-new-wait {
+      color: #1d4ed8;
     }
 
     .rj-reason {
@@ -837,10 +872,10 @@
               title="Edit the LOE values in an Excel-like editor">
               <i class="fa fa-pen-to-square me-1"></i>Edit LOE
             </button>
-            <button type="button" class="btn btn-outline-danger btn-sm fw-bold" id="btnRejectedRequests"
-              onclick="openRejectedRequests()"
-              title="Drawing and BOM requests the approvers rejected — who rejected them, when and why">
-              <i class="fa fa-ban me-1"></i>Rejected
+            <button type="button" class="btn btn-outline-primary btn-sm fw-bold" id="btnFileRequests"
+              onclick="openFileRequests()"
+              title="Drawing and BOM change requests: pending approval, approved and rejected — who asked, who approved or rejected them, when and why">
+              <i class="fa fa-list-check me-1"></i>Drawing / BOM Requests
             </button>
             <a href="kickOff.html" class="btn btn-outline-secondary btn-sm fw-bold">
               <i class="fa fa-arrow-left me-1"></i>Back to Projects
@@ -1036,13 +1071,14 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <!-- xlsx-js-style is a drop-in SheetJS replacement that exposes the
          same global `XLSX` API but supports cell-level styles. Used by
          exportAssembliesToExcel() to paint the brand-coloured header,
          row banding, and borders. -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <!-- defer: only needed for BOM preview / export, so it doesn't hold up the page. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <!-- Punch In / Punch Out — opened by the Attendance button in the
          header and driven by assets/js/attendance.js. -->
   <div class="modal fade" id="attendanceModal" tabindex="-1" aria-hidden="true">
@@ -1083,7 +1119,6 @@
   <script src="assets/js/approvals.js"></script>
   <script src="assets/js/issues.js"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <script src="assets/vendor/aos/aos.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
   <script src="assets/js/main.js"></script>
   <script src="assets/js/workWeek.js"></script>
@@ -1553,7 +1588,9 @@
             : `${API_URL}/kickoffRoutes/projectAssemblies/${projectId}`,
           { headers: { Authorization: `Bearer ${token}` } },
         );
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401)
+          return handleUnauthorized(data.message || "Please login again");
         if (data && data.permissions) applyPagePermissions(data.permissions);
         if (!res.ok || !data.success) {
           throw new Error(data.message || "Failed to load assemblies");
@@ -1989,7 +2026,27 @@
       // Stats should only reflect real data rows   exclude section
       // dividers ("BO SPECIFICATION", "TITLE", etc.) so the Total Assemblies
       // count matches the rows users actually work on.
-      const realAssemblies = filtered.filter((a) => !isDividerRow(a));
+      // A whole-number parent row with sub-assemblies (1 → 1.1, 1.2) is a
+      // heading for them, not an assembly of its own: counting it made
+      // "Pending" disagree with its green "Released" badge (which follows
+      // its sub-assemblies).
+      const parentsWithChildren = new Set();
+      partitionSections(filtered).forEach((sec, si) => {
+        sec.rows.forEach((a) => {
+          const sr = String(a.srNo || "").trim();
+          if (sr.indexOf(".") >= 0) parentsWithChildren.add(si + "|" + parentKey(sr));
+        });
+      });
+      const isParentRow = new Set();
+      partitionSections(filtered).forEach((sec, si) => {
+        sec.rows.forEach((a) => {
+          const sr = String(a.srNo || "").trim();
+          if (/^\d+$/.test(sr) && parentsWithChildren.has(si + "|" + sr)) isParentRow.add(a);
+        });
+      });
+      const realAssemblies = filtered.filter(
+        (a) => !isDividerRow(a) && !isParentRow.has(a),
+      );
       const total = realAssemblies.length;
       const released = realAssemblies.filter(
         (a) => (a.drawingFiles || []).length > 0,
@@ -2587,13 +2644,15 @@
         const pl = t.replacePayload || {};
         const olds = (pl.oldDrawings || []).map((f) => f.originalName || "bom");
         const news = (pl.newDrawings || []).map((f) => f.originalName || "bom");
-        return `<div>Replace BOM <span class="text-danger">${escapeHtml(olds.join(", ") || "—")}</span> → <span class="text-success">${escapeHtml(news.join(", ") || "—")}</span>.</div>`;
+        if (!news.length)
+          return `<div>Delete BOM <span class="text-danger">${escapeHtml(olds.join(", ") || "—")}</span>.</div>`;
+        return `<div>Replace BOM <span class="text-danger">${escapeHtml(olds.join(", ") || "—")}</span> → <span class="text-success">${escapeHtml(news.join(", "))}</span>.</div>`;
       }
       if (t.kind === "replace-drawings") {
         const pl = t.replacePayload || {};
         const news = pl.newDrawings || [];
         const targets = (pl.replaceTargets || []).length;
-        const list = (news.length ? news : pl.deleteTargets || [])
+        const list = (news.length ? news : pl.deleteTargets || pl.oldDrawings || [])
           .slice(0, 5)
           .map((f) => `<li>${escapeHtml(f.originalName || "drawing")}</li>`)
           .join("");
@@ -2620,6 +2679,20 @@
       // the card without it vanishing underneath.
       if (immediate) kill();
       else _hoverCardHideTimer = setTimeout(kill, 220);
+    }
+
+    // The server refuses "approve" on your own request; rejecting it
+    // withdraws it. So your own request offers only Withdraw.
+    function isOwnTicket(t) {
+      let me = currentUserId;
+      if (!me) {
+        try {
+          const u = JSON.parse(localStorage.getItem("user") || "null") || {};
+          me = String(u.id || u._id || "");
+        } catch (_) { }
+      }
+      const by = t && t.requestedBy;
+      return !!me && String((by && by._id) || by || "") === me;
     }
 
     function showPendingHoverCard(chip) {
@@ -2653,7 +2726,9 @@
                 ? `<button type="button" class="btn btn-sm btn-primary" data-hc-details><i class="fa fa-pen-to-square me-1"></i>Enter impact</button>`
                 : ""
               : canDecide
-                ? `<button type="button" class="btn btn-sm btn-outline-danger" data-hc-decide="reject"><i class="fa fa-xmark me-1"></i>Reject</button>
+                ? isOwnTicket(ticket)
+                  ? `<button type="button" class="btn btn-sm btn-outline-danger" data-hc-decide="reject" data-hc-own="1" title="Your own request — another approver has to approve it"><i class="fa fa-rotate-left me-1"></i>Withdraw</button>`
+                  : `<button type="button" class="btn btn-sm btn-outline-danger" data-hc-decide="reject"><i class="fa fa-xmark me-1"></i>Reject</button>
                        <button type="button" class="btn btn-sm btn-success" data-hc-decide="approve"><i class="fa fa-check me-1"></i>Approve</button>`
                 : ""
             }
@@ -2697,8 +2772,9 @@
         btn.addEventListener("click", (e) => {
           const t = ticketOf(e.currentTarget);
           const decision = e.currentTarget.dataset.hcDecide;
+          const own = e.currentTarget.dataset.hcOwn === "1";
           hidePendingHoverCard(true);
-          if (t) window.ApprovalInbox.decideTicket(t._id, decision);
+          if (t) window.ApprovalInbox.decideTicket(t._id, decision, own);
         }),
       );
       _hoverCardEl = card;
@@ -2722,11 +2798,14 @@
     // expose upload progress, so we use XMLHttpRequest. `onProgress` gets
     // (percent, bytesLoaded, bytesTotal). Resolves with the parsed JSON
     // body on success; rejects with an Error otherwise.
-    function _xhrUpload(url, formData, onProgress) {
+    function _xhrUpload(url, formData, onProgress, authToken, retried) {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url);
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.setRequestHeader(
+          "Authorization",
+          `Bearer ${authToken || localStorage.getItem("token") || token}`,
+        );
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable && typeof onProgress === "function") {
             onProgress(
@@ -2743,12 +2822,28 @@
           } catch (_) {
             /* non-JSON response */
           }
+          // Login expired mid-session: renew it and send the same files
+          // once more, rather than lose the upload.
+          if (xhr.status === 401 && !retried) {
+            renewLoginToken().then((fresh) => {
+              if (fresh)
+                return resolve(_xhrUpload(url, formData, onProgress, fresh, true));
+              handleUnauthorized(data.message || "Please login again");
+              reject(new Error("Your login has expired — please sign in again."));
+            });
+            return;
+          }
           if (xhr.status >= 200 && xhr.status < 300 && data.success)
             resolve(data);
-          else
-            reject(
-              new Error(data.message || `Upload failed (HTTP ${xhr.status})`),
+          else {
+            const err = new Error(
+              data.message || `Upload failed (HTTP ${xhr.status})`,
             );
+            // Callers may need the server's flags (e.g. needsReason).
+            err.status = xhr.status;
+            err.data = data;
+            reject(err);
+          }
         };
         xhr.onerror = () =>
           reject(new Error("Network error during upload."));
@@ -3197,26 +3292,54 @@
         accept: ".xls,.xlsx,.csv",
       });
       if (!picked.length) return;
-      const reason = await _promptReplaceReason(
-        "Replacing a BOM needs approval — the project's PM notes the impact first. Please describe why it must be replaced.",
-        assemblyId,
-      );
+      // Your own BOM within its first hour is swapped straight away (no
+      // reason, no approval) — same rule the server applies.
+      const asm = allAssemblies.find((a) => String(a._id) === String(assemblyId));
+      const bom = ((asm && asm.bomFiles) || []).find((f) => String(f._id) === String(fileId));
+      const mineFresh =
+        bom &&
+        currentUserId &&
+        String(bom.uploadedBy || "") === currentUserId &&
+        bom.uploadedAt &&
+        Date.now() - new Date(bom.uploadedAt).getTime() <= 60 * 60 * 1000;
+      const reason = mineFresh
+        ? ""
+        : await _promptReplaceReason(
+          "Replacing a BOM needs approval — the project's PM notes the impact first. Please describe why it must be replaced.",
+          assemblyId,
+        );
       if (reason === null) return;
-      Swal.fire({
-        title: "Uploading BOM…",
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading(),
-      });
-      try {
+      const upload = (why) => {
+        Swal.fire({
+          title: "Uploading BOM…",
+          allowOutsideClick: false,
+          didOpen: () => Swal.showLoading(),
+        });
         const formData = new FormData();
         picked.forEach((f) => formData.append("bomFile", f));
         formData.append("replaceFileIds", JSON.stringify([fileId]));
-        formData.append("reason", reason);
-        const data = await _xhrUpload(
+        formData.append("reason", why);
+        return _xhrUpload(
           `${API_URL}/kickoffRoutes/requestReplaceBom/${assemblyId}`,
           formData,
           () => { },
         );
+      };
+      try {
+        let data;
+        try {
+          data = await upload(reason);
+        } catch (err) {
+          // The first hour ran out (or the clocks differ): the server now
+          // wants a reason — ask for it and send again.
+          if (!(err && err.data && err.data.needsReason) || reason) throw err;
+          const why = await _promptReplaceReason(
+            "Replacing a BOM needs approval — the project's PM notes the impact first. Please describe why it must be replaced.",
+            assemblyId,
+          );
+          if (why === null) return;
+          data = await upload(why);
+        }
         await loadAssemblies();
         renderBomModal();
         await Swal.fire({
@@ -3536,7 +3659,7 @@
           }
           if (v.length < 5) {
             Swal.showValidationMessage(
-              "Please provide at least a short explanation.",
+              "Please write at least 5 characters explaining why.",
             );
             return false;
           }
@@ -3548,15 +3671,27 @@
     }
 
     /**
-     * The "Rejected" list: drawing / BOM requests the approvers turned
-     * down — project, assembly, the files involved, who asked and why, who
-     * rejected it, when, and their reason. Opens on this project; "All
-     * projects" widens it. On the cross-project pending view it starts on
-     * all projects.
+     * The "Drawing / BOM requests" list: drawing and BOM replacements and
+     * deletions, one tab per status —
+     *   Pending approval  with the project's PM (impact note) or the
+     *                     approvers: who it's still waiting on
+     *   Approved          applied: who approved it and when
+     *   Rejected          who rejected it, when and their reason
+     * Each row also shows the project, assembly, files, and who asked and
+     * why. Withdrawn requests are in none of the tabs. Opens on this
+     * project; "All projects" widens it. On the cross-project pending
+     * view it starts on all projects.
      */
-    async function openRejectedRequests() {
+    async function openFileRequests() {
       let scopeAll = allPendingMode || !projectId;
+      let tab = "pending";
       let rows = [];
+      let counts = { pending: 0, approved: 0, rejected: 0 };
+      const TABS = [
+        { key: "pending", label: "Pending approval" },
+        { key: "approved", label: "Approved" },
+        { key: "rejected", label: "Rejected" },
+      ];
       const fmt = (d) =>
         d
           ? new Date(d).toLocaleString("en-IN", {
@@ -3573,22 +3708,67 @@
             .map((n) => `<span class="${cls}">${escapeHtml(n)}</span>`)
             .join("<br>")
           : "—";
+      const names = (list) =>
+        (list || []).length ? list.map(escapeHtml).join(", ") : "—";
+      // Each load is numbered so a slow reply for a tab you've already
+      // left can't overwrite the one you're on.
+      let loadSeq = 0;
       const load = async () => {
-        const qs = scopeAll
-          ? ""
-          : `?projectId=${encodeURIComponent(projectId)}`;
+        const mine = ++loadSeq;
+        const params = new URLSearchParams({ status: tab });
+        if (!scopeAll) params.set("projectId", projectId);
         const res = await fetch(
-          `${API_URL}/kickoffRoutes/assemblyEditApproval/rejected${qs}`,
+          `${API_URL}/kickoffRoutes/assemblyEditApproval/fileRequests?${params}`,
           { headers: { Authorization: `Bearer ${token}` } },
         );
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success)
-          throw new Error(data.message || "Could not load rejected requests.");
-        rows = data.rejected || [];
+          throw new Error(data.message || "Could not load the requests.");
+        if (mine !== loadSeq) return false;
+        rows = data.requests || [];
+        counts = data.counts || counts;
+        return true;
+      };
+      // Columns that differ by tab; the rest are shared.
+      const COLS = {
+        pending: {
+          when: ["Requested on", (r) => fmt(r.requestedAt)],
+          newFiles: "New file(s)",
+          newCls: "rj-new-wait",
+          last: [
+            "Waiting on",
+            (r) =>
+              r.stage === "pm-review"
+                ? `The project's PM — impact note${r.pmDueAt ? `<span class="rj-sub">Goes on to the approvers ${escapeHtml(fmt(r.pmDueAt))} if not written</span>` : ""}`
+                : `${names(r.waitingOn)}${r.approvedBy.length ? `<span class="rj-sub">Approved so far: ${names(r.approvedBy)}</span>` : ""}`,
+          ],
+        },
+        approved: {
+          when: ["Approved on", (r) => fmt(r.approvedAt)],
+          newFiles: "New file(s)",
+          newCls: "rj-new-ok",
+          last: ["Approved by", (r) => names(r.approvedBy)],
+        },
+        rejected: {
+          when: ["Rejected on", (r) => fmt(r.rejectedAt)],
+          newFiles: "Rejected file(s)",
+          newCls: "rj-new",
+          last: [
+            "Rejected by / reason",
+            (r) =>
+              `${escapeHtml(r.rejectedByName || "—")}<span class="rj-reason d-block">${escapeHtml(r.rejectionNote || "No reason given")}</span>`,
+          ],
+        },
       };
       const render = () => {
         const popup = Swal.getPopup();
         if (!popup) return;
+        popup.querySelectorAll("[data-fr-tab]").forEach((b) => {
+          const on = b.dataset.frTab === tab;
+          b.classList.toggle("active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+          b.querySelector(".fr-n").textContent = counts[b.dataset.frTab] ?? 0;
+        });
         const q = String(popup.querySelector("#rjSearch").value || "")
           .trim()
           .toLowerCase();
@@ -3603,43 +3783,62 @@
               ...(r.oldNames || []),
               ...(r.newNames || []),
               r.requestedByName,
+              r.requestReason,
+              ...(r.waitingOn || []),
+              ...(r.approvedBy || []),
               r.rejectedByName,
               r.rejectionNote,
-              r.requestReason,
             ]
               .join(" ")
               .toLowerCase()
               .includes(q),
         );
+        const label = TABS.find((x) => x.key === tab).label.toLowerCase();
         popup.querySelector("#rjCount").textContent =
-          `${shown.length} of ${rows.length} rejected request${rows.length === 1 ? "" : "s"}`;
+          `${shown.length} of ${rows.length} ${label}` +
+          (counts[tab] > rows.length ? ` (newest ${rows.length} of ${counts[tab]})` : "");
+        const c = COLS[tab];
         popup.querySelector("#rjBody").innerHTML = shown.length
           ? `<table class="rj-table">
                 <thead><tr>
-                  <th>Rejected on</th><th>Project</th><th>Assembly</th><th>Request</th>
-                  <th>Current file(s)</th><th>Rejected file(s)</th>
-                  <th>Requested by</th><th>Rejected by</th><th>Reason for rejection</th>
+                  <th>${c.when[0]}</th><th>Project</th><th>Assembly</th><th>Request</th>
+                  <th>Current file(s)</th><th>${c.newFiles}</th>
+                  <th>Requested by</th><th>${c.last[0]}</th>
                 </tr></thead>
                 <tbody>${shown
             .map(
               (r) => `<tr>
-                      <td>${escapeHtml(fmt(r.rejectedAt))}</td>
+                      <td>${escapeHtml(c.when[1](r))}</td>
                       <td><b>${escapeHtml(r.projectNo || "—")}</b>${r.clientName ? `<span class="rj-sub">${escapeHtml(r.clientName)}</span>` : ""}</td>
                       <td>${escapeHtml(r.assemblyLabel || "—")}</td>
                       <td>${escapeHtml(r.label)}</td>
                       <td>${files(r.oldNames, "rj-old")}</td>
-                      <td>${r.newNames.length ? files(r.newNames, "rj-new") : '<span class="rj-sub">(delete)</span>'}</td>
+                      <td>${r.newNames.length ? files(r.newNames, c.newCls) : '<span class="rj-sub">(delete)</span>'}</td>
                       <td>${escapeHtml(r.requestedByName || "—")}<span class="rj-sub">${escapeHtml(fmt(r.requestedAt))}</span>${r.requestReason ? `<span class="rj-sub">Reason: ${escapeHtml(r.requestReason)}</span>` : ""}${r.pmImpact ? `<span class="rj-sub">PM impact: ${escapeHtml(r.pmImpact)}</span>` : ""}</td>
-                      <td>${escapeHtml(r.rejectedByName || "—")}</td>
-                      <td class="rj-reason">${escapeHtml(r.rejectionNote || "No reason given")}</td>
+                      <td>${c.last[1](r)}</td>
                     </tr>`,
             )
             .join("")}</tbody>
               </table>`
-          : `<div class="rj-empty">${rows.length ? "Nothing matches the search." : `No rejected drawing or BOM requests ${scopeAll ? "in any project" : "in this project"}.`}</div>`;
+          : `<div class="rj-empty">${rows.length ? "Nothing matches the search." : `No ${label} drawing or BOM requests ${scopeAll ? "in any project" : "in this project"}.`}</div>`;
+      };
+      const reload = async (popup) => {
+        popup.querySelector("#rjBody").innerHTML =
+          '<div class="rj-empty">Loading…</div>';
+        const mine = loadSeq + 1;
+        try {
+          if (!(await load())) return;
+        } catch (err) {
+          if (mine !== loadSeq) return;
+          rows = [];
+          popup.querySelector("#rjBody").innerHTML =
+            `<div class="rj-empty">${escapeHtml(err.message)}</div>`;
+          return;
+        }
+        render();
       };
 
-      _showBusy("Loading rejected requests…", "Please wait…");
+      _showBusy("Loading drawing / BOM requests…", "Please wait…");
       try {
         await load();
       } catch (err) {
@@ -3647,15 +3846,21 @@
         return;
       }
       Swal.fire({
-        title: "Rejected drawing / BOM requests",
+        title: "Drawing / BOM requests",
         width: 1200,
         showConfirmButton: false,
         showCloseButton: true,
         customClass: { container: "swal-above-bs-modal" },
         html: `
             <div class="rj-tools">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Request status">
+                ${TABS.map(
+          (t) =>
+            `<button type="button" class="btn fr-tab fr-tab-${t.key}" data-fr-tab="${t.key}" aria-pressed="false">${t.label} <span class="badge bg-light text-dark fr-n">0</span></button>`,
+        ).join("")}
+              </div>
               ${projectId && !allPendingMode
-            ? `<div class="btn-group btn-group-sm" role="group">
+            ? `<div class="btn-group btn-group-sm" role="group" aria-label="Projects">
                       <button type="button" class="btn ${scopeAll ? "btn-outline-secondary" : "btn-secondary"}" data-rj-scope="project">This project</button>
                       <button type="button" class="btn ${scopeAll ? "btn-secondary" : "btn-outline-secondary"}" data-rj-scope="all">All projects</button>
                     </div>`
@@ -3667,8 +3872,17 @@
             <div class="rj-wrap" id="rjBody"></div>`,
         didOpen: (popup) => {
           popup.querySelector("#rjSearch").addEventListener("input", render);
+          popup.querySelectorAll("[data-fr-tab]").forEach((b) =>
+            b.addEventListener("click", () => {
+              if (b.dataset.frTab === tab) return;
+              tab = b.dataset.frTab;
+              rows = [];
+              render(); // highlight the tab straight away
+              reload(popup);
+            }),
+          );
           popup.querySelectorAll("[data-rj-scope]").forEach((b) =>
-            b.addEventListener("click", async () => {
+            b.addEventListener("click", () => {
               const all = b.dataset.rjScope === "all";
               if (all === scopeAll) return;
               scopeAll = all;
@@ -3677,17 +3891,7 @@
                 x.classList.toggle("btn-secondary", on);
                 x.classList.toggle("btn-outline-secondary", !on);
               });
-              popup.querySelector("#rjBody").innerHTML =
-                '<div class="rj-empty">Loading…</div>';
-              try {
-                await load();
-              } catch (err) {
-                rows = [];
-                popup.querySelector("#rjBody").innerHTML =
-                  `<div class="rj-empty">${escapeHtml(err.message)}</div>`;
-                return;
-              }
-              render();
+              reload(popup);
             }),
           );
           render();
@@ -3928,7 +4132,7 @@
         inputValidator: (v) => {
           if (!v || !v.trim()) return "A reason is required.";
           if (v.trim().length < 5)
-            return "Please provide at least a short explanation.";
+            return "Please write at least 5 characters explaining why.";
           return null;
         },
       });
@@ -4528,9 +4732,13 @@
       XLSX.writeFile(wb, `Drawings_${safeLabel}_${stamp}.xlsx`);
     }
 
-    document
-      .getElementById("filterText")
-      .addEventListener("input", renderAssemblies);
+    // Redraw once typing pauses, not on every key — the table can hold
+    // hundreds of assemblies.
+    let filterTimer = null;
+    document.getElementById("filterText").addEventListener("input", () => {
+      clearTimeout(filterTimer);
+      filterTimer = setTimeout(renderAssemblies, 200);
+    });
     document
       .getElementById("filterSection")
       .addEventListener("change", renderAssemblies);
@@ -4679,44 +4887,6 @@
     updateSortIndicators();
 
     loadAssemblies();
-  </script>
-  <!-- Code injected by live-server -->
-  <script>
-    // <![CDATA[  <-- For SVG support
-    if ('WebSocket' in window) {
-      (function () {
-        function refreshCSS() {
-          var sheets = [].slice.call(document.getElementsByTagName("link"));
-          var head = document.getElementsByTagName("head")[0];
-          for (var i = 0; i < sheets.length; ++i) {
-            var elem = sheets[i];
-            var parent = elem.parentElement || head;
-            parent.removeChild(elem);
-            var rel = elem.rel;
-            if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
-              var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
-              elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
-            }
-            parent.appendChild(elem);
-          }
-        }
-        var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
-        var address = protocol + window.location.host + window.location.pathname + '/ws';
-        var socket = new WebSocket(address);
-        socket.onmessage = function (msg) {
-          if (msg.data == 'reload') window.location.reload();
-          else if (msg.data == 'refreshcss') refreshCSS();
-        };
-        if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
-          console.log('Live reload enabled.');
-          sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
-        }
-      })();
-    }
-    else {
-      console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
-    }
-    // ]]>
   </script>
 </body>
 

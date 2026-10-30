@@ -7,10 +7,7 @@
   <title>YD PROJECTS — Activity Log</title>
   <link href="assets/img/yd-favicon.png" rel="icon" />
   <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="assets/vendor/aos/aos.css" rel="stylesheet" />
-  <link href="assets/vendor/swiper/swiper-bundle.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
   <link href="assets/css/main.css" rel="stylesheet" />
   <style>
@@ -1506,12 +1503,12 @@
             <div class="card-x">
               <div class="empty" style="padding: 64px 20px">
                 <i class="fa-solid fa-triangle-exclamation"></i>
-                <div class="empty-t">Couldn't load the Activity Log</div>
-                <p class="muted mt-1 mb-3">
+                <div class="empty-t" id="deniedTitle">Couldn't load the Activity Log</div>
+                <p class="muted mt-1 mb-3" id="deniedText">
                   The server didn't respond. Refresh the page, and if it keeps
                   failing sign in again.
                 </p>
-                <a href="kickOff.html" class="btn-pill ghost">
+                <a href="kickOff.html" class="btn-pill ghost" id="deniedBack">
                   Back to Kick Off Projects
                 </a>
               </div>
@@ -1604,7 +1601,7 @@
 
                 <button id="exportBtn" class="btn-pill ghost"
                   title="Download the filtered activity as CSV (up to 20,000 rows)">
-                  <i class="fa-solid fa-arrow-down-to-line"></i>&nbsp;Export
+                  <i class="fa-solid fa-download"></i>&nbsp;Export
                 </button>
               </div>
 
@@ -2087,13 +2084,25 @@
         throw new Error("unauthorized");
       }
       if (res.status === 403) {
-        showDenied();
+        showDenied("forbidden");
         throw new Error("forbidden");
       }
       return res.json();
     }
 
-    function showDenied() {
+    // "forbidden": the account may not see the log (customers) — say so,
+    // and send them back to their own home page. Otherwise the server
+    // couldn't be reached.
+    function showDenied(kind) {
+      if (kind === "forbidden") {
+        const me = JSON.parse(localStorage.getItem("user") || "{}");
+        el("deniedTitle").textContent = "The Activity Log is for staff only";
+        el("deniedText").textContent =
+          "Your account doesn't have access to it. Ask a Superadmin if you think you should.";
+        const back = el("deniedBack");
+        back.href = me.role === "customer" ? "projectReport.html" : "ourClients.html";
+        back.textContent = "Back to home";
+      }
       el("pageBody").classList.add("d-none");
       el("deniedBox").classList.remove("d-none");
     }
@@ -3467,14 +3476,21 @@
         const res = await fetch(`${API_URL}/activity/export?${queryString()}`, {
           headers: { Authorization: "Bearer " + token },
         });
-        if (!res.ok) throw new Error("Export failed");
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          if (res.status === 401 && typeof handleUnauthorized === "function")
+            return handleUnauthorized(d.message || "Please login again");
+          throw new Error(d.message || "The export failed. Please try again.");
+        }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = `activity-log-${toInputValue(range.from)}_to_${toInputValue(range.to)}.csv`;
         a.click();
-        URL.revokeObjectURL(url);
+        // Freed a moment later — revoking at once can cancel the download
+        // in some browsers.
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
       } catch (err) {
         Swal.fire({
           icon: "error",
@@ -3496,50 +3512,12 @@
         const gate = await fetch(`${API_URL}/activity/access`, {
           headers: { Authorization: "Bearer " + token },
         }).then((r) => r.json());
-        if (!gate.allowed) return showDenied();
+        if (!gate.allowed) return showDenied("forbidden");
       } catch {
         return showDenied();
       }
       reloadAll();
     });
-  </script>
-  <!-- Code injected by live-server -->
-  <script>
-    // <![CDATA[  <-- For SVG support
-    if ('WebSocket' in window) {
-      (function () {
-        function refreshCSS() {
-          var sheets = [].slice.call(document.getElementsByTagName("link"));
-          var head = document.getElementsByTagName("head")[0];
-          for (var i = 0; i < sheets.length; ++i) {
-            var elem = sheets[i];
-            var parent = elem.parentElement || head;
-            parent.removeChild(elem);
-            var rel = elem.rel;
-            if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
-              var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
-              elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
-            }
-            parent.appendChild(elem);
-          }
-        }
-        var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
-        var address = protocol + window.location.host + window.location.pathname + '/ws';
-        var socket = new WebSocket(address);
-        socket.onmessage = function (msg) {
-          if (msg.data == 'reload') window.location.reload();
-          else if (msg.data == 'refreshcss') refreshCSS();
-        };
-        if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
-          console.log('Live reload enabled.');
-          sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
-        }
-      })();
-    }
-    else {
-      console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
-    }
-    // ]]>
   </script>
 </body>
 

@@ -1989,16 +1989,13 @@
               onclick="event.preventDefault(); Swal.fire('Activity Log', 'The Activity Log page lives on the live website and is not part of this offline prototype.', 'info');">
               <i class="fa-solid fa-chart-bar"></i>Activity Log
             </a>
-            <a href="#" class="btn" title="Show pending assemblies across all active projects"
+            <a href="#" class="btn" title="All drawings across all active projects (filter for pending); Library Drawings from there"
               onclick="event.preventDefault(); ydOpenPendingDrawings();">
-              <i class="fa fa-clock"></i>Pending Drawings
+              <i class="fa fa-drafting-compass"></i>Drawings
             </a>
             <a href="#" class="btn" title="YDAstra — Procurement (available once a BOM is uploaded)"
               onclick="event.preventDefault(); showYDAstraView();">
               <i class="fa fa-cogs"></i>YDAstra
-            </a>
-            <a href="#" class="btn" title="Library folders and subfolders with their BOMs and drawings" onclick="event.preventDefault(); showLibraryView();">
-              <i class="fa fa-book"></i>Library Drawings
             </a>
             <button class="btn btn-tb-primary" id="btnNewProject" onclick="koOpenCreateModal()">
               <i class="fa fa-plus"></i>Initiate New Project
@@ -2038,7 +2035,7 @@
         <div class="page-title-bar d-flex align-items-center justify-content-between flex-wrap gap-2">
           <div>
             <h2>
-              <i class="fa fa-drafting-compass me-2"></i> Assembly Drawings
+              <i class="fa fa-drafting-compass me-2"></i> <span id="drawingsTitle">Assembly Drawings</span>
               <select id="drawingsProjectSelector" class="form-select form-select-sm d-inline-block w-auto ms-2"
                 style="font-size: 16px; font-weight: normal; vertical-align: middle;"
                 onchange="openProjectDrawings(this.value)"></select>
@@ -2046,15 +2043,24 @@
             <div class="meta" id="projectMeta">Loading project</div>
           </div>
           <div class="d-flex gap-2 align-items-center">
-            <button type="button" class="btn btn-success btn-sm fw-bold" id="btnDownloadCurrentLoe"
-              onclick="downloadCurrentLoe()"
-              title="Download the LOE with current Remark values (RELEASED for assemblies that have a drawing uploaded)">
-              <i class="fa fa-file-excel me-1"></i>Download Updated LOE
-            </button>
+            <div class="btn-group" id="btnLoeMenu">
+              <button type="button" class="btn btn-success btn-sm fw-bold dropdown-toggle" data-bs-toggle="dropdown"
+                aria-expanded="false" title="Download or edit the LOE">
+                <i class="fa fa-file-excel me-1"></i>LOE
+              </button>
+              <ul class="dropdown-menu shadow-sm">
+                <li><button type="button" class="dropdown-item small" id="btnDownloadCurrentLoe" onclick="downloadCurrentLoe()"
+                    title="Download the LOE with current Remark values (RELEASED for assemblies that have a drawing uploaded)">
+                    <i class="fa fa-download fa-fw me-2 text-success"></i>Download Updated LOE</button></li>
+                <li><button type="button" class="dropdown-item small" id="btnEditExcel" onclick="if (window.openProjectDrawingsId) openExcelViewer(window.openProjectDrawingsId())"
+                    title="Edit the LOE values in an Excel-like editor">
+                    <i class="fa fa-pen-to-square fa-fw me-2 text-primary"></i>Edit LOE</button></li>
+              </ul>
+            </div>
             <button type="button" class="btn btn-outline-success btn-sm fw-bold d-none" id="btnDownloadTableExcel"
               onclick="exportAssembliesToExcel()"
               title="Download the currently shown table (after filters/sort) as an Excel file">
-              <i class="fa fa-download me-1"></i>Download Pending Drawings
+              <i class="fa fa-download me-1"></i>Download Drawings List
             </button>
             <button type="button" class="btn btn-success btn-sm fw-bold" id="btnBulkUpload"
               onclick="document.getElementById('globalBOMUploadInput').click()"
@@ -2063,22 +2069,23 @@
             </button>
             <input type="file" id="globalBOMUploadInput" style="display: none;" accept=".xlsx, .xls, .pdf" multiple
               onchange="handleGlobalBOMUpload(this)">
-            <button type="button" class="btn btn-primary btn-sm fw-bold" id="btnEditExcel" onclick="if (window.openProjectDrawingsId) openExcelViewer(window.openProjectDrawingsId())"
-              title="Edit the LOE values in an Excel-like editor">
-              <i class="fa fa-pen-to-square me-1"></i>Edit LOE
+            <button type="button" class="btn btn-outline-info btn-sm fw-bold" id="btnLibraryDrawings"
+              onclick="showLibraryView()" title="Library folders and subfolders with their BOMs and drawings">
+              <i class="fa fa-book me-1"></i>Library Drawings
             </button>
-            <button type="button" class="btn btn-outline-primary btn-sm fw-bold design-only" id="btnCopyDrawings"
-              onclick="dwCopyDrawings()" disabled
-              title="Tick assemblies, then copy their drawings to another project">
+            <button type="button" class="btn btn-outline-primary btn-sm fw-bold design-only d-none" id="btnCopyDrawings"
+              onclick="dwCopyDrawings()"
+              title="Copy the drawings of the ticked assemblies to another project">
               <i class="fa fa-copy me-1"></i>Copy Drawings <span class="cnt"></span>
             </button>
             <button type="button" class="btn btn-outline-danger btn-sm fw-bold" id="btnRejectedRequests"
-              onclick="openRejectedRequests()"
-              title="Drawing and BOM requests the approvers rejected — who rejected them, when and why">
-              <i class="fa fa-ban me-1"></i>Rejected
+              onclick="openRejectedRequests()" aria-label="Rejected requests"
+              title="Rejected — drawing and BOM requests the approvers rejected: who rejected them, when and why">
+              <i class="fa fa-ban"></i>
             </button>
-            <a href="#" class="btn btn-outline-secondary btn-sm fw-bold" onclick="event.preventDefault(); showDashboardView();">
-              <i class="fa fa-arrow-left me-1"></i>Back to Projects
+            <a href="#" class="btn btn-outline-secondary btn-sm fw-bold" onclick="event.preventDefault(); showDashboardView();"
+              title="Back to Projects" aria-label="Back to Projects">
+              <i class="fa fa-arrow-left"></i>
             </a>
           </div>
         </div>
@@ -2322,8 +2329,8 @@
               <button type="button" class="btn btn-outline-secondary btn-sm fw-bold" onclick="libShowActivity()">
                 <i class="fa fa-clock-rotate-left me-1"></i>Activity
               </button>
-              <a href="#" class="btn btn-outline-secondary btn-sm fw-bold" onclick="event.preventDefault(); showDashboardView();">
-                <i class="fa fa-arrow-left me-1"></i>Back to Projects
+              <a href="#" class="btn btn-outline-secondary btn-sm fw-bold" onclick="event.preventDefault(); if (window.dwIsAllProjects && dwIsAllProjects()) ydOpenPendingDrawings(); else showDrawingsView(window.openProjectDrawingsId ? openProjectDrawingsId() : undefined);">
+                <i class="fa fa-arrow-left me-1"></i>Back to Drawings
               </a>
             </div>
           </div>
@@ -6600,7 +6607,7 @@
       const dataUrlToBlob = u => w.dataUrlToBlob(u);   // defined once the page has loaded
       // ---- Copy Drawings: ticked rows → rows of any project ----
       function updateCopyButton() {
-        $('#btnCopyDrawings').prop('disabled', !copySel.size).find('.cnt').text(copySel.size ? `(${copySel.size})` : '');
+        $('#btnCopyDrawings').toggleClass('d-none', !copySel.size).find('.cnt').text(copySel.size ? `(${copySel.size})` : '');
       }
       w.dwToggleCopyPick = function (id, on) { if (on) copySel.add(id); else copySel.delete(id); updateCopyButton(); };
       w.dwCopyDrawings = function () {
@@ -6899,7 +6906,8 @@
           allAssemblies = [];
           projects().filter(p => p.stage >= 7).forEach(p => {
             changed = prepareProject(p) || changed;
-            buildAssemblies(p).forEach(a => { if (!isDividerRow(a) && !(a.drawingFiles || []).length) allAssemblies.push(a); });
+            const leaf = new Set((w.ydTargetRows ? w.ydTargetRows(p) : []).map(x => x.idx));
+            buildAssemblies(p).forEach(a => { if (!isDividerRow(a) && (!w.ydTargetRows || leaf.has(a.loeIdx))) allAssemblies.push(a); });
           });
           projectInfo = null;
         } else {
@@ -6969,9 +6977,10 @@
               <div class="input-group input-group-sm design-only">
                 <input type="file" multiple class="form-control form-control-sm" id="uploadInput_${a._id}" title="Excel files are filed as BOMs; everything else as drawings">
                 <button type="button" class="btn btn-primary" onclick="uploadAssemblyFiles('${a._id}')"><i class="fa fa-upload me-1"></i>Upload</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="dwUploadFolder('${a._id}')" title="Choose Folder: every file in a folder and its subfolders, then pick which to upload"><i class="fa fa-folder-open"></i></button>
                 <button type="button" class="btn btn-outline-info" onclick="ydFetchFromLibrary('${a.projId}', ${a.loeIdx})" title="Fetch from Library"><i class="fa fa-book"></i></button>
               </div>`;
-        const pick = !isAggRow && drawingCount && !allPendingMode
+        const pick = !isAggRow && drawingCount
           ? `<input type="checkbox" class="form-check-input me-2 design-only dw-copy-pick" title="Select to copy its drawings to another project"${copySel.has(a._id) ? " checked" : ""} onchange="dwToggleCopyPick('${a._id}', this.checked)">` : "";
         const t = pendingTicketsFor(a._id);
         const chip = t.length ? `<span class="badge bg-warning text-dark ms-2 pending-approval-chip" role="button" tabindex="0" data-assembly-id="${escapeHtml(a._id)}"><i class="fa fa-clock me-1"></i>${t.every(x => x.status === "pm-review") ? "Awaiting PM impact" : "Pending approval"}${t.length > 1 ? ` (${t.length})` : ""}</span>` : "";
@@ -7022,7 +7031,7 @@
           const anyChildDrawing = new Map(), anyChildBom = new Map(), hasChildren = new Set();
           sec.rows.forEach(a => { const sr = String(a.srNo || "").trim(); if (sr.indexOf(".") >= 0) { const key = parentKey(sr); hasChildren.add(key); if ((a.drawingFiles || []).length > 0) anyChildDrawing.set(key, true); if ((a.bomFiles || []).length > 0) anyChildBom.set(key, true); } });
           sec.rows.forEach(a => {
-            const sr = String(a.srNo || "").trim(), isParentWithChildren = /^\d+$/.test(sr) && hasChildren.has(sr);
+            const sr = String(a.srNo || "").trim(), isParentWithChildren = !allPendingMode && /^\d+$/.test(sr) && hasChildren.has(sr);
             _statusReleased.set(a._id, isParentWithChildren ? anyChildDrawing.get(sr) === true : (a.drawingFiles || []).length > 0);
             _bomReleased.set(a._id, isParentWithChildren ? anyChildBom.get(sr) === true : (a.bomFiles || []).length > 0);
           });
@@ -7035,7 +7044,7 @@
         document.getElementById("statReleased").textContent = released;
         document.getElementById("statPending").textContent = total - released;
         const projectNo = allPendingMode ? "All Active Projects" : (projectInfo && projectInfo.projectNo) || "";
-        document.getElementById("projectMeta").textContent = `${allPendingMode ? `Pending drawings across ${projectNo}` : `Project: ${projectNo}`} - ${total} assemblies`;
+        document.getElementById("projectMeta").textContent = `${allPendingMode ? `Drawings across ${projectNo}` : `Project: ${projectNo}`} - ${total} assemblies`;
         const tbody = document.getElementById("assembliesBody");
         document.getElementById("loadingState").classList.add("d-none");
         document.getElementById("tableWrap").classList.remove("d-none");
@@ -7253,11 +7262,12 @@
       };
       function _isBomFile(file) { return /\.(xls|xlsx|xlsm|csv)$/i.test((file && file.name) || ""); }
       function _uploadTitle(d, b) { const p = []; if (d) p.push(`${d} drawing${d === 1 ? "" : "s"}`); if (b) p.push(`${b} BOM file${b === 1 ? "" : "s"}`); return `Uploading ${p.join(" and ")}…`; }
-      w.uploadAssemblyFiles = async function (assemblyId) {
+      w.uploadAssemblyFiles = async function (assemblyId, fileList) {
         const input = document.getElementById(`uploadInput_${assemblyId}`);
-        if (!input || !input.files || input.files.length === 0) return Swal.fire("Required", "Choose one or more files", "warning");
+        const all = Array.from(fileList || (input && input.files) || []);
+        if (!all.length) return Swal.fire("Required", "Choose one or more files", "warning");
         const row = rowOf(assemblyId); if (!row) return;
-        const all = Array.from(input.files), boms = all.filter(_isBomFile), drawings = all.filter(f => !_isBomFile(f));
+        const boms = all.filter(_isBomFile), drawings = all.filter(f => !_isBomFile(f));
         Swal.fire({ title: _uploadTitle(drawings.length, boms.length), didOpen: () => Swal.showLoading(), allowOutsideClick: false, showConfirmButton: false });
         try {
           row.lr.drawingFiles = row.lr.drawingFiles || [];
@@ -7265,10 +7275,82 @@
           if (boms.length) await w.dwAddBomFiles(row.proj, row.lr, boms);
           await save();
         } catch (err) { return Swal.fire("Error", err.message || "Upload failed", "error"); }
-        input.value = "";
+        if (input) input.value = "";
         await Swal.fire({ icon: "success", title: "Uploaded", html: (drawings.length ? `${drawings.length} drawing${drawings.length === 1 ? "" : "s"}` : "") + (drawings.length && boms.length ? "<br>" : "") + (boms.length ? `${boms.length} BOM file${boms.length === 1 ? "" : "s"}` : ""), timer: 1600, showConfirmButton: false });
         loadAssemblies();
         if (w.renderTable) w.renderTable();
+      };
+
+      // ---- Choose Folder: every file in the folder and its subfolders, the
+      // user ticks which to upload; Excel → BOM, everything else → drawings ----
+      const _junkFile = f => /^(~\$|\.)/.test(f.name) || /^(thumbs\.db|desktop\.ini)$/i.test(f.name);
+      w.dwUploadFolder = function (assemblyId) {
+        const inp = document.createElement("input");
+        inp.type = "file"; inp.multiple = true; inp.webkitdirectory = true; inp.style.display = "none";
+        inp.addEventListener("change", () => { const list = Array.from(inp.files || []); inp.remove(); if (list.length) w.dwPickFromFolder(assemblyId, list); });
+        inp.addEventListener("cancel", () => inp.remove());
+        document.body.appendChild(inp); inp.click();
+      };
+      w.dwPickFromFolder = async function (assemblyId, list) {
+        const row = rowOf(assemblyId); if (!row) return;
+        const files = list.filter(f => !_junkFile(f) && f.size > 0)
+          .sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name, undefined, { numeric: true }));
+        const folder = ((files[0] || list[0]).webkitRelativePath || '').split('/')[0] || 'Folder';
+        if (!files.length) return Swal.fire("Empty folder", `No files found in ${escapeHtml(folder)} or its subfolders.`, "info");
+        const size = n => n < 1048576 ? Math.max(1, Math.round(n / 1024)) + " KB" : (n / 1048576).toFixed(1) + " MB";
+        const rows = files.map((f, i) => {
+          const path = (f.webkitRelativePath || f.name).split('/').slice(1, -1).join(' / ');
+          return `<tr><td class="text-center"><input type="checkbox" class="form-check-input fp-pick" data-i="${i}" checked></td>
+            <td style="word-break: break-all;"><div class="fw-semibold">${escapeHtml(f.name)}</div>${path ? `<div class="text-muted small"><i class="fa fa-folder me-1"></i>${escapeHtml(path)}</div>` : ''}</td>
+            <td>${_isBomFile(f) ? '<span class="badge bg-success">BOM</span>' : '<span class="badge bg-primary">Drawing</span>'}</td>
+            <td class="text-nowrap text-muted small">${size(f.size)}</td></tr>`;
+        }).join("");
+        const res = await Swal.fire({
+          title: `<i class="fa fa-folder-open me-2"></i>${escapeHtml(folder)}`,
+          width: 900,
+          html: `<div class="text-start">
+              <div class="small text-muted mb-2">Upload to <b>${escapeHtml([row.lr.srNo, row.lr.assemblyName].filter(Boolean).join(" — "))}</b>. Files from all subfolders are listed; Excel files go to BOM, everything else to drawings.</div>
+              <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="fpAll"><i class="fa fa-check-double me-1"></i>Select All</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="fpNone"><i class="fa fa-xmark me-1"></i>Clear</button>
+                <button type="button" class="btn btn-sm btn-outline-success" id="fpBoms">Only BOMs</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="fpDwgs">Only Drawings</button>
+                <input type="search" class="form-control form-control-sm ms-auto" id="fpSearch" placeholder="Filter by name or subfolder" style="max-width: 240px;">
+              </div>
+              <div style="max-height: 55vh; overflow: auto;" class="border rounded">
+                <table class="table table-sm table-hover align-middle mb-0" id="fpTable">
+                  <thead class="table-light" style="position: sticky; top: 0;"><tr><th style="width:40px;"></th><th>File</th><th style="width:90px;">Goes to</th><th style="width:80px;">Size</th></tr></thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+              <div class="small mt-2" id="fpCount"></div>
+            </div>`,
+          showCancelButton: true,
+          confirmButtonText: '<i class="fa fa-upload me-1"></i>Upload selected',
+          didOpen: () => {
+            const pop = Swal.getPopup(), boxes = () => [...pop.querySelectorAll(".fp-pick")];
+            const visible = () => boxes().filter(b => b.closest("tr").style.display !== "none");
+            const count = () => {
+              const sel = boxes().filter(b => b.checked).map(b => files[+b.dataset.i]);
+              const nb = sel.filter(_isBomFile).length;
+              pop.querySelector("#fpCount").innerHTML = `<b>${sel.length}</b> of ${files.length} selected — ${sel.length - nb} drawing${sel.length - nb === 1 ? "" : "s"}, ${nb} BOM${nb === 1 ? "" : "s"}`;
+              Swal.getConfirmButton().disabled = !sel.length;
+            };
+            pop.querySelector("#fpAll").onclick = () => { visible().forEach(b => b.checked = true); count(); };
+            pop.querySelector("#fpNone").onclick = () => { visible().forEach(b => b.checked = false); count(); };
+            pop.querySelector("#fpBoms").onclick = () => { boxes().forEach(b => b.checked = _isBomFile(files[+b.dataset.i])); count(); };
+            pop.querySelector("#fpDwgs").onclick = () => { boxes().forEach(b => b.checked = !_isBomFile(files[+b.dataset.i])); count(); };
+            pop.querySelector("#fpSearch").oninput = e => {
+              const q = e.target.value.toLowerCase().trim();
+              boxes().forEach(b => { const f = files[+b.dataset.i]; b.closest("tr").style.display = !q || (f.webkitRelativePath || f.name).toLowerCase().includes(q) ? "" : "none"; });
+            };
+            pop.querySelector("#fpTable").addEventListener("change", count);
+            pop.querySelector("#fpTable tbody").addEventListener("click", e => { if (e.target.closest("input")) return; const b = e.target.closest("tr") && e.target.closest("tr").querySelector(".fp-pick"); if (b) { b.checked = !b.checked; count(); } });
+            count();
+          },
+          preConfirm: () => [...Swal.getPopup().querySelectorAll(".fp-pick:checked")].map(b => files[+b.dataset.i])
+        });
+        if (res.isConfirmed && res.value && res.value.length) await w.uploadAssemblyFiles(assemblyId, res.value);
       };
 
       // ---- BOM modal ----
@@ -7638,7 +7720,7 @@
         const ws = XLSX.utils.json_to_sheet(data);
         ws["!cols"] = Object.keys(data[0]).map(key => ({ wch: Math.min(Math.max(Math.max(key.length, ...data.slice(0, 50).map(r => String(r[key] == null ? "" : r[key]).length)) + 2, 10), 32) }));
         const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Assemblies");
-        const label = allPendingMode ? "AllPending" : (projectInfo && projectInfo.projectNo) || "Project";
+        const label = allPendingMode ? "AllProjects" : (projectInfo && projectInfo.projectNo) || "Project";
         const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
         XLSX.writeFile(wb, `Drawings_${String(label).replace(/[^a-z0-9_-]+/gi, "_")}_${stamp}.xlsx`);
       };
@@ -7696,9 +7778,10 @@
       w.openProjectDrawings = function (projId) {
         allPendingMode = false;
         projectId = projId;
+        $('#drawingsTitle').text('Assembly Drawings');
         $('#drawingsProjectSelector').show();
         $('.all-pending-only').addClass('d-none');
-        $('#btnDownloadCurrentLoe, #btnEditExcel, #btnBulkUpload').removeClass('d-none');
+        $('#btnLoeMenu, #btnBulkUpload').removeClass('d-none');
         $('#btnDownloadTableExcel').addClass('d-none');
         document.querySelectorAll("#filterPendingOnly .show-filter, #filterPendingOnly button").forEach(el => (el.disabled = false));
         sortState = { key: "srNo", dir: "asc" };
@@ -7708,15 +7791,18 @@
         $('#dashboardView').hide(); $('#ydcProjectSummary, #ydcAssemblyView, #libraryView').hide();
         $('#drawingsView').fadeIn(); $('.main').addClass('drawings-mode'); $('#navYdAscend').show();
         allPendingMode = true; projectId = null;
+        $('#drawingsTitle').text('Drawings — All Projects');
         $('#drawingsProjectSelector').hide();
         $('.all-pending-only').removeClass('d-none');
-        $('#btnDownloadCurrentLoe, #btnEditExcel, #btnBulkUpload').addClass('d-none');
+        $('#btnLoeMenu, #btnBulkUpload').addClass('d-none');
         $('#btnDownloadTableExcel').removeClass('d-none');
-        document.querySelectorAll('#drawingsView .show-filter').forEach(b => { b.checked = b.value === 'pending'; });
-        document.querySelectorAll("#filterPendingOnly .show-filter, #filterPendingOnly button").forEach(el => (el.disabled = true));
+        // opens on everything; "Drawings Not Uploaded" in Show gives the old pending list
+        document.querySelectorAll('#drawingsView .show-filter').forEach(b => { b.checked = b.value === 'all'; });
+        document.querySelectorAll("#filterPendingOnly .show-filter, #filterPendingOnly button").forEach(el => (el.disabled = false));
         sortState = { key: "projectNo", dir: "asc" };
         loadAssemblies();
       };
+      w.dwIsAllProjects = () => allPendingMode;
       w.dwReload = () => loadAssemblies();
 
       // ---- event wiring (live) ----
@@ -9694,7 +9780,24 @@
       const drawingsOf = (s, k) => s.drawings.filter(d => keyOfDrawing(d) === k && d.status !== 'archived');
       const bomsOf = (s, k) => s.boms.filter(b => keyOfBom(b) === k && b.status === 'current');
       const revOf = (s, d) => s.revisions.find(r => r.id === d.currentRevisionId) || null;
-      const usagesOf = (s, d) => s.usages.filter(u => u.status === 'active' && u.libraryDrawingId === d.id);
+      // A usage is live only while its project still exists and one of its rows
+      // still holds the link (deleted projects / removed rows / re-uploaded LOEs
+      // leave stale usages behind).
+      function liveUsage(u) {
+        if (u.status !== 'active') return false;
+        const proj = (w.projectsData || []).find(x => String(x.id) === String(u.projectAssemblyId));
+        return !!proj && (proj.loeData || []).some(lr => (lr.drawingFiles || []).some(f => f.libraryUsageId === u.id));
+      }
+      const usagesOf = (s, d) => s.usages.filter(u => u.libraryDrawingId === d.id && liveUsage(u));
+      // marks stale usages inactive in storage (on opening the Library)
+      async function releaseStaleUsages() {
+        const stale = LIB.usages.filter(u => u.status === 'active' && !liveUsage(u)).length;
+        if (!stale) return;
+        await commit(s => {
+          const t = nowIso();
+          s.usages.forEach(u => { if (u.status === 'active' && !liveUsage(u)) { u.status = 'inactive'; u.deactivatedAt = t; u.deactivatedReason = 'project or row no longer holds the link'; } });
+        }, `Released ${stale} link(s) whose project or row no longer exists`);
+      }
       const subsOf = (s, a) => s.subassemblies.filter(x => x.assemblyId === a.id).sort((x, y) => collator.compare(x.code, y.code));
 
       // "2630-TRL-01-01-00-001 Rev B.pdf" → { number: '2630-TRL-01-01-00-001', rev: 'B' }
@@ -9756,15 +9859,24 @@
       }
       const cmp = (a, b) => V.sortDir * collator.compare(String(sortVal(a)), String(sortVal(b)));
 
-      // An assembly with subassemblies takes no BOM: the BOMs go on its subassemblies.
+      // A folder with subfolders takes no files — its drawings and BOMs go on the
+      // subfolders, and the row shows their totals (as parent rows on Drawings).
+      const aggClass = (u, t) => u === 0 ? 'badge-soft-muted' : u >= t ? 'bg-success' : 'bg-warning text-dark';
       function uploadCell(it, kids) {
         const nd = it.dw.length, nb = it.bm.length;
-        const noBom = it.type === 'asm' && kids > 0 && !nb;
+        if (it.type === 'asm' && kids > 0) {
+          const a = it.agg, left = [];
+          if (nd) left.push(`<button type="button" class="btn btn-sm btn-view-compact btn-outline-primary" onclick="libOpenFiles('${it.k}','dwg')" title="Files uploaded on this folder before it had subfolders"><i class="fa fa-eye me-1"></i>Drawings (${nd})</button>`);
+          if (nb) left.push(`<button type="button" class="btn btn-sm btn-view-compact btn-outline-success" onclick="libOpenFiles('${it.k}','bom')" title="Files uploaded on this folder before it had subfolders"><i class="fa fa-eye me-1"></i>BOM (${nb})</button>`);
+          return `<div class="up-sec up-sec-files"><div class="up-sec-title"><i class="fa fa-folder-open me-1"></i>Drawings &amp; BOM in subfolders</div>
+              <span class="badge ${aggClass(a.dwg, a.total)}"><i class="fa fa-drafting-compass me-1"></i>${a.dwg}/${a.total} Drawings Uploaded</span>
+              <span class="badge ${aggClass(a.bom, a.total)}"><i class="fa fa-file-excel me-1"></i>${a.bom}/${a.total} BOM Uploaded</span>
+              ${left.length ? `<div class="d-flex gap-1 mt-1">${left.join('')}</div>` : ''}</div>`;
+        }
         return `<div class="up-sec up-sec-files">
             <div class="d-flex gap-1 mb-1">
               <button type="button" class="btn btn-sm btn-view-compact flex-fill ${nd ? 'btn-primary' : 'btn-outline-primary'}" onclick="libOpenFiles('${it.k}','dwg')"${nd ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>Drawings (${nd})</button>
-              ${noBom ? '<span class="btn btn-sm btn-view-compact flex-fill btn-outline-secondary disabled" title="BOMs are uploaded on the subfolders">BOM on subfolders</span>'
-                : `<button type="button" class="btn btn-sm btn-view-compact flex-fill ${nb ? 'btn-success' : 'btn-outline-success'}" onclick="libOpenFiles('${it.k}','bom')"${nb ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>BOM (${nb})</button>`}
+              <button type="button" class="btn btn-sm btn-view-compact flex-fill ${nb ? 'btn-success' : 'btn-outline-success'}" onclick="libOpenFiles('${it.k}','bom')"${nb ? '' : ' disabled'}><i class="fa fa-eye me-1"></i>BOM (${nb})</button>
             </div>
             <div class="input-group input-group-sm">
               <input type="file" multiple class="form-control form-control-sm" id="libUp_${it.rec.id}" title="Select many files at once: Excel files are filed as BOMs, everything else as drawings">
@@ -9782,9 +9894,14 @@
         const sub = it.type === 'asm'
           ? (opts.kids ? `${opts.kids} subfolder${opts.kids > 1 ? 's' : ''}` : 'Folder')
           : 'Subfolder of ' + esc(it.asm.code + ' ' + it.asm.name);
-        const status = it.dw.length ? '<span class="badge bg-success"><i class="fa fa-circle-check me-1"></i>Released</span>' : '<span class="badge badge-soft-muted">Pending</span>';
+        const status = it.status === 'Released' ? '<span class="badge bg-success"><i class="fa fa-circle-check me-1"></i>Released</span>' : '<span class="badge badge-soft-muted">Pending</span>';
+        const hasFiles = it.dw.length || it.bm.length;
+        const addSub = it.type !== 'asm' ? ''
+          : hasFiles && !opts.kids
+            ? `<button type="button" class="btn btn-outline-secondary" title="This folder has its own drawings / BOMs, so it can't have subfolders" onclick="libAddSub('${r.id}')"><i class="fa fa-plus"></i></button>`
+            : `<button type="button" class="btn btn-outline-primary" title="Add subfolder" onclick="libAddSub('${r.id}')"><i class="fa fa-plus"></i></button>`;
         const acts = `<div class="btn-group btn-group-sm">
-            ${it.type === 'asm' ? `<button type="button" class="btn btn-outline-primary" title="Add subfolder" onclick="libAddSub('${r.id}')"><i class="fa fa-plus"></i></button>` : ''}
+            ${addSub}
             <button type="button" class="btn btn-outline-secondary" title="Edit" onclick="libEdit('${it.k}')"><i class="fa fa-pen"></i></button>
             <button type="button" class="btn btn-outline-danger" title="Delete" onclick="libDelete('${it.k}')"><i class="fa fa-trash"></i></button>
           </div>`;
@@ -9803,13 +9920,19 @@
       function render() {
         const s = LIB;
         const asms = s.assemblies.map(a => ({ a, it: itemInfo(s, a, 'asm', null), subs: subsOf(s, a).map(x => itemInfo(s, x, 'sub', a)) }));
-        const all = asms.flatMap(g => [g.it, ...g.subs]);
+        asms.forEach(g => {
+          if (!g.subs.length) return;
+          g.it.agg = { total: g.subs.length, dwg: g.subs.filter(x => x.dw.length).length, bom: g.subs.filter(x => x.bm.length).length };
+          g.it.status = g.it.agg.dwg ? 'Released' : 'Pending';
+        });
+        // Released / Pending count the rows that take files: subfolders and folders without subfolders
+        const all = asms.flatMap(g => g.subs.length ? g.subs : [g.it]);
 
         $('#libStatAsm').text(s.assemblies.length);
         $('#libStatSub').text(s.subassemblies.length);
         $('#libStatReleased').text(all.filter(x => x.dw.length).length);
         $('#libStatPending').text(all.filter(x => !x.dw.length).length);
-        $('#libStatLinks').text(s.usages.filter(u => u.status === 'active').length);
+        $('#libStatLinks').text(s.usages.filter(liveUsage).length);
         $('#libMeta').text(`${s.assemblies.length} folders · ${s.drawings.filter(d => d.status !== 'archived').length} drawings · ${s.boms.filter(b => b.status === 'current').length} BOM files`);
 
         const f = filtering();
@@ -9889,6 +10012,10 @@
       w.libAddSub = async function (asmId) {
         await reload();
         const a = LIB.assemblies.find(x => x.id === asmId); if (!a) return;
+        const own = drawingsOf(LIB, 'asm:' + a.id).length + bomsOf(LIB, 'asm:' + a.id).length;
+        if (own && !subsOf(LIB, a).length) {
+          return Swal.fire('Folder already has files', `${a.code} ${a.name} has its own drawings / BOMs, so it can't have subfolders. Delete or move those files first, or add a new folder.`, 'warning');
+        }
         const v = await itemForm(`Add Subfolder to ${a.code}`, { code: `${a.code}.${subsOf(LIB, a).length + 1}`, name: '', drawingNumber: '' });
         if (!v) return;
         try {
@@ -9950,8 +10077,8 @@
         files = [...(files || [])];
         if (!files.length) return Swal.fire('No file selected', 'Choose one or more drawings / BOM files first.', 'info');
         const rec = ownerOf(LIB, k);
-        if (k.startsWith('asm:') && rec && subsOf(LIB, rec).length && files.some(f => isExcel(f.name))) {
-          return Swal.fire('BOM goes on the subfolders', `${rec.code} ${rec.name} has subfolders, so its BOMs are uploaded on ${subsOf(LIB, rec).map(x => x.code).join(', ')}. Only drawings can be uploaded on this row.`, 'warning');
+        if (k.startsWith('asm:') && rec && subsOf(LIB, rec).length) {
+          return Swal.fire('Upload on the subfolders', `${rec.code} ${rec.name} has subfolders, so its drawings and BOMs go on ${subsOf(LIB, rec).map(x => x.code).join(', ')}.`, 'warning');
         }
         Swal.fire({ title: `Uploading ${files.length} file${files.length > 1 ? 's' : ''}…`, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         const stored = [];
@@ -10246,6 +10373,7 @@
           const old = raw && (raw.schema || 1) < 2;
           LIB = upgrade(raw);
           if (old) await LibStore.save(LIB); // keep the upgraded shape
+          await releaseStaleUsages();
           render();
         } catch (e) {
           $('#libLoading').html(`<span class="text-danger">Library storage is not available in this browser: ${esc(e.message || e)}</span>`);
