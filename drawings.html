@@ -255,6 +255,23 @@
       color: #fff;
     }
 
+    /* YDAstra: light green fill, green border and text. Only shown when
+         the row has at least one BOM. */
+    .up-sec-files .btn-view-compact.btn-ydastra {
+      flex: 0 0 auto;
+      font-weight: 600;
+      background-color: #e9f7ef;
+      border-color: #1faa72;
+      color: #146c43;
+    }
+
+    .up-sec-files .btn-view-compact.btn-ydastra:hover,
+    .up-sec-files .btn-view-compact.btn-ydastra:focus {
+      background-color: #d1efdd;
+      border-color: #146c43;
+      color: #0f5132;
+    }
+
     .up-sec-title {
       font-size: 11px;
       font-weight: 700;
@@ -525,6 +542,124 @@
     }
 
     /* "Same drawing file elsewhere" chooser */
+    /* Upload summary: left-aligned rows, centred as a block */
+    .up-sum {
+      display: inline-block;
+      text-align: left;
+      min-width: 300px;
+      max-width: 100%;
+    }
+
+    .up-sum-line {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 5px 0;
+      font-size: 0.98rem;
+      color: #374151;
+    }
+
+    .up-sum-line>i {
+      width: 18px;
+      margin-top: 3px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .up-sum-line>div {
+      min-width: 0;
+      flex: 1;
+    }
+
+    /* File names listed in a dialog */
+    .up-files {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 6px 10px;
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #f9fafb;
+      text-align: left;
+      font-size: 0.86rem;
+    }
+
+    .up-files li {
+      padding: 2px 0;
+      word-break: break-word;
+    }
+
+    .up-files li>i {
+      color: #6b7280;
+      margin-right: 7px;
+    }
+
+    .up-files .up-more {
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    /* "File already exists" dialog on upload */
+    .dup-intro {
+      font-size: 0.92rem;
+      color: #374151;
+      margin: 4px 0 8px;
+    }
+
+    .dup-sub {
+      display: block;
+      font-size: 0.78rem;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .dup-note {
+      font-size: 0.82rem;
+      color: #4b5563;
+      margin-top: 10px;
+    }
+
+    .dup-tools {
+      text-align: right;
+      font-size: 0.82rem;
+      margin-bottom: 6px;
+    }
+
+    .dup-list {
+      max-height: 340px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      text-align: left;
+    }
+
+    .dup-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .dup-row:last-child {
+      border-bottom: 0;
+    }
+
+    .dup-name {
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    .dup-name .dup-sub {
+      margin-bottom: 0;
+    }
+
+    .dup-row .btn-group {
+      flex-shrink: 0;
+    }
+
     .lr-intro {
       font-size: 0.9rem;
       color: #4b5563;
@@ -628,7 +763,7 @@
     }
 
     .rj-wrap {
-      max-height: 60vh;
+      max-height: 72vh;
       overflow: auto;
       border: 1px solid #e5e7eb;
       border-radius: 8px;
@@ -866,7 +1001,7 @@
             <button type="button" class="btn btn-outline-success btn-sm fw-bold d-none" id="btnDownloadTableExcel"
               onclick="exportAssembliesToExcel()"
               title="Download the currently shown table (after filters/sort) as an Excel file">
-              <i class="fa fa-download me-1"></i>Download Pending Drawings
+              <i class="fa fa-download me-1"></i>Download Shown List
             </button>
             <button type="button" class="btn btn-primary btn-sm fw-bold" id="btnEditExcel" onclick="openEditExcel()"
               title="Edit the LOE values in an Excel-like editor">
@@ -1026,7 +1161,7 @@
   </main>
 
   <div class="modal fade" id="drawingsModal" tabindex="-1" data-bs-focus="false">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="drawingsModalTitle">Drawings</h5>
@@ -1584,7 +1719,9 @@
         }
         const res = await fetch(
           allPendingMode
-            ? `${API_URL}/kickoffRoutes/pendingAssemblies`
+            ? // Every assembly, released too, so the Show filters work
+            // here; "Drawings Not Uploaded" is ticked on arrival.
+            `${API_URL}/kickoffRoutes/pendingAssemblies?all=1`
             : `${API_URL}/kickoffRoutes/projectAssemblies/${projectId}`,
           { headers: { Authorization: `Bearer ${token}` } },
         );
@@ -1849,6 +1986,7 @@
         `<div class="d-flex gap-1 mb-1">
                 <button type="button" class="btn btn-sm btn-view-compact flex-fill ${drawingCount ? "btn-primary" : "btn-outline-primary"}" onclick="openDrawingsModal('${a._id}')"${drawingCount ? "" : " disabled"}><i class="fa fa-eye me-1"></i>Drawings (${drawingCount})</button>
                 <button type="button" class="btn btn-sm btn-view-compact flex-fill ${bomCount ? "btn-success" : "btn-outline-success"}" onclick="openBomModal('${a._id}')"${bomCount ? "" : " disabled"}><i class="fa fa-eye me-1"></i>BOM (${bomCount})</button>
+                ${bomCount ? `<button type="button" class="btn btn-sm btn-view-compact btn-ydastra" onclick="openYdAstra('${a._id}')"><i class="fa fa-gears me-1"></i>YDAstra</button>` : ""}
               </div>
               <div class="input-group input-group-sm design-only">
                 <input type="file" multiple class="form-control form-control-sm" id="uploadInput_${a._id}" title="Excel files are filed as BOMs; everything else as drawings">
@@ -1952,8 +2090,10 @@
           // sub-assemblies is "uploaded" only when a child has the file (its
           // own files are ignored, like the badge); everything else (leaves /
           // sub-assemblies) is judged on its own files.
+          // The all-pending view lists rows flat across many projects, each
+          // badge on its own files — so judge every row on its own files.
           const isParentWithChildren =
-            /^\d+$/.test(sr) && hasChildren.has(sr);
+            !allPendingMode && /^\d+$/.test(sr) && hasChildren.has(sr);
           _statusReleased.set(
             a._id,
             isParentWithChildren
@@ -2030,8 +2170,10 @@
       // heading for them, not an assembly of its own: counting it made
       // "Pending" disagree with its green "Released" badge (which follows
       // its sub-assemblies).
+      // (Not in the all-pending view: its rows are flat, from many
+      // projects, so every row counts.)
       const parentsWithChildren = new Set();
-      partitionSections(filtered).forEach((sec, si) => {
+      if (!allPendingMode) partitionSections(filtered).forEach((sec, si) => {
         sec.rows.forEach((a) => {
           const sr = String(a.srNo || "").trim();
           if (sr.indexOf(".") >= 0) parentsWithChildren.add(si + "|" + parentKey(sr));
@@ -2062,7 +2204,7 @@
           : projectNoParam || projectId;
       const visibleCount = total;
       const metaPrefix = allPendingMode
-        ? `Pending drawings across ${projectNo}`
+        ? `Drawings across ${projectNo}`
         : `Project: ${projectNo}`;
       document.getElementById("projectMeta").textContent =
         `Project: ${projectNo} Â· ${total} assemblies` +
@@ -2072,7 +2214,7 @@
       document.getElementById("projectMeta").textContent =
         `${metaPrefix} - ${total} assemblies` +
         (visibleCount !== total ? ` - showing ${visibleCount}` : "");
-      document.title = `${allPendingMode ? "Pending Drawings" : "Drawings"} - ${projectNo} | YOGIJI DIGI`;
+      document.title = `Drawings - ${projectNo} | YOGIJI DIGI`;
 
       const tbody = document.getElementById("assembliesBody");
       if (!filtered.length) {
@@ -2391,24 +2533,23 @@
 
       bodyEl.innerHTML = `
           ${pendingBanner}
-          <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+          <div class="d-flex align-items-center mb-2 gap-3">
             <span class="text-muted small">${files.length} drawing${files.length === 1 ? "" : "s"}</span>
-            <div class="d-flex gap-2 flex-wrap">
+            <div class="form-check mb-0">
+              <input type="checkbox" class="form-check-input" id="dwgSelectAll" onchange="toggleSelectAll(this)"${allSelected ? " checked" : ""}>
+              <label class="form-check-label small fw-semibold" for="dwgSelectAll">Select All</label>
+              <span class="text-muted small ms-2">${selCount} selected</span>
+            </div>
+          </div>
+          <!-- Every action on one row: the whole-assembly ones, then the ones
+               on the ticked drawings. -->
+          <div class="d-flex align-items-center mb-2 flex-wrap gap-2 border-top pt-2">
               <button type="button" class="btn btn-sm btn-warning text-light design-only" onclick="requestReplaceAllDrawings('${assembly._id}')" title="Replace every drawing on this assembly (public files need approval; any request already awaiting approval is withdrawn)">
                 <i class="fa fa-arrows-rotate me-1"></i>Replace All
               </button>
               <button type="button" class="btn btn-sm btn-primary" onclick="downloadAllAssemblyDrawings('${assembly._id}')">
                 <i class="fa fa-file-zipper me-1"></i>Download All (.zip)
               </button>
-            </div>
-          </div>
-          <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 border-top pt-2">
-            <div class="form-check mb-0">
-              <input type="checkbox" class="form-check-input" id="dwgSelectAll" onchange="toggleSelectAll(this)"${allSelected ? " checked" : ""}>
-              <label class="form-check-label small fw-semibold" for="dwgSelectAll">Select All</label>
-              <span class="text-muted small ms-2">${selCount} selected</span>
-            </div>
-            <div class="d-flex gap-2 flex-wrap">
               <button type="button" class="btn btn-sm btn-outline-primary" onclick="downloadSelectedDrawings('${assembly._id}')"${selDisabled}>
                 <i class="fa fa-download me-1"></i>Download Selected
               </button>
@@ -2421,7 +2562,6 @@
               <button type="button" class="btn btn-sm btn-outline-danger design-only" onclick="deleteSelectedDrawings('${assembly._id}')"${selDisabled}>
                 <i class="fa fa-trash me-1"></i>Delete Selected
               </button>
-            </div>
           </div>
           <div class="list-group">
             ${files
@@ -2901,17 +3041,35 @@
       if (!input || !input.files || input.files.length === 0) {
         return Swal.fire("Required", "Choose one or more files", "warning");
       }
-      const all = Array.from(input.files);
-      const boms = all.filter(_isBomFile);
-      const drawings = all.filter((f) => !_isBomFile(f));
+      const picked = Array.from(input.files);
+      const boms = picked.filter(_isBomFile);
+      const pickedDrawings = picked.filter((f) => !_isBomFile(f));
+
+      // A drawing named like one already on this assembly: ask whether to
+      // replace that one or skip the new file, before anything is sent.
+      const plan = await _planDuplicateDrawings(assemblyId, pickedDrawings);
+      if (!plan) return; // cancelled — nothing uploaded
+      const { drawings, replace, skipped } = plan;
+      const all = [...drawings, ...boms];
+      const replaceFiles = replace ? replace.files : [];
+      if (!all.length && !replaceFiles.length) {
+        input.value = "";
+        return Swal.fire({
+          icon: "info",
+          title: "Nothing uploaded",
+          html: `Every file was skipped — ${skipped.length === 1 ? "it is" : "they are"} already on this assembly:${_fileListHtml(skipped)}`,
+          confirmButtonColor: "#2a5071",
+        });
+      }
 
       // One bar for the whole selection: they were picked together, so
       // they should be watched together even though each kind goes to its
       // own endpoint.
+      const jobFiles = [...all, ...replaceFiles];
       const tracker = _openUploadProgress({
-        title: _uploadTitle(drawings.length, boms.length),
-        totalBytes: all.reduce((s, f) => s + (f.size || 0), 0),
-        totalFiles: all.length,
+        title: _uploadTitle(drawings.length + replaceFiles.length, boms.length),
+        totalBytes: jobFiles.reduce((s, f) => s + (f.size || 0), 0),
+        totalFiles: jobFiles.length,
       });
       // Count files the server has already saved (chunkDone fires only
       // after a request succeeds) so a mid-way failure can say so.
@@ -2938,40 +3096,305 @@
         await loadAssemblies();
         // Sent in this order (drawings in picker order, then BOMs), so
         // the unsaved ones are exactly those after the saved count — name
-        // them, since they aren't the last N in the picker.
-        const remaining = [...drawings, ...boms].slice(savedFiles);
-        const shown = remaining.slice(0, 15);
-        const listHtml =
-          `<ul style="text-align:left;max-height:180px;overflow:auto;margin:6px 0 0;">` +
-          shown.map((f) => `<li>${escapeHtml(f.name)}</li>`).join("") +
-          (remaining.length > shown.length
-            ? `<li>… and ${remaining.length - shown.length} more</li>`
-            : "") +
-          `</ul>`;
+        // them, since they aren't the last N in the picker. Replacements
+        // go last, so none of them were sent either.
+        const remaining = [...all.slice(savedFiles), ...replaceFiles];
         return Swal.fire(
           "Partly uploaded",
-          `${savedFiles} of ${all.length} file${all.length === 1 ? "" : "s"} were saved before the error. ` +
+          `${savedFiles} of ${jobFiles.length} file${jobFiles.length === 1 ? "" : "s"} were saved before the error. ` +
           `Re-pick only these ${remaining.length}:` +
-          listHtml +
+          _fileListHtml(remaining) +
           `<br>` +
           escapeHtml(_uploadErrorMsg(err)),
           "warning",
         );
       }
+
+      // Same-named files last, through the normal Replace request — so a
+      // public drawing still needs its reason and approval.
+      let replaced = null;
+      if (replace) {
+        try {
+          replaced = await _submitReplaceDrawings(
+            assemblyId,
+            replace.targetIds,
+            replace.files,
+            replace.reason,
+            replace.linked,
+            // Not counted as saved: until the commit succeeds they aren't
+            // on the assembly.
+            { tracker: { progress: tracker.progress, chunkDone: _chunkDone } },
+          );
+        } catch (err) {
+          input.value = "";
+          await loadAssemblies();
+          return Swal.fire(
+            all.length ? "Partly uploaded" : "Error",
+            (all.length
+              ? `${all.length} new file${all.length === 1 ? " was" : "s were"} uploaded, but replacing the existing ` +
+              `file${replaceFiles.length === 1 ? "" : "s"} failed. Re-pick only ${replaceFiles.length === 1 ? "this one" : `these ${replaceFiles.length}`}:`
+              : `Replacing the existing file${replaceFiles.length === 1 ? "" : "s"} failed:`) +
+            _fileListHtml(replaceFiles) +
+            `<br>` +
+            escapeHtml(_uploadErrorMsg(err)),
+            all.length ? "warning" : "error",
+          );
+        }
+      }
+
       input.value = "";
+      if (replaced) _showBusy("Refreshing drawings…", "Almost done…");
+      await loadAssemblies();
+      // One row per outcome: icon, then the text (and any file names).
+      const line = (icon, html) =>
+        `<div class="up-sum-line"><i class="fa-solid ${icon}"></i><div>${html}</div></div>`;
+      const lines = [];
+      if (drawings.length)
+        lines.push(
+          line(
+            "fa-circle-check text-success",
+            `${drawings.length} new drawing${drawings.length === 1 ? "" : "s"} uploaded`,
+          ),
+        );
+      if (boms.length)
+        lines.push(
+          line(
+            "fa-circle-check text-success",
+            `${boms.length} BOM file${boms.length === 1 ? "" : "s"} uploaded`,
+          ),
+        );
+      if (replaced)
+        lines.push(
+          line(
+            replaced.pendingApproval
+              ? "fa-hourglass-half text-warning"
+              : "fa-arrows-rotate text-primary",
+            escapeHtml(replaced.message || "Replaced"),
+          ),
+        );
+      if (skipped.length)
+        lines.push(
+          line(
+            "fa-forward text-secondary",
+            `Skipped ${skipped.length} — kept the existing file${skipped.length === 1 ? "" : "s"}` +
+            _fileListHtml(skipped),
+          ),
+        );
+      // Only a plain upload closes by itself; a replace or a skip is worth
+      // reading.
+      const plain = !replaced && !skipped.length;
       await Swal.fire({
         icon: "success",
-        title: "Uploaded",
-        html:
-          (drawings.length
-            ? `${drawings.length} drawing${drawings.length === 1 ? "" : "s"}`
-            : "") +
-          (drawings.length && boms.length ? "<br>" : "") +
-          (boms.length ? `${boms.length} BOM file${boms.length === 1 ? "" : "s"}` : ""),
-        timer: 1600,
-        showConfirmButton: false,
+        title: all.length || !replaced ? "Uploaded" : _replaceOutcomeTitle(replaced),
+        html: `<div class="up-sum">${lines.join("")}</div>`,
+        timer: plain ? 1600 : undefined,
+        showConfirmButton: !plain,
+        confirmButtonColor: "#2a5071",
       });
-      loadAssemblies();
+    }
+
+    // File names for a dialog, in a small boxed list, capped at 15.
+    function _fileListHtml(files) {
+      const shown = files.slice(0, 15);
+      return (
+        `<ul class="up-files">` +
+        shown
+          .map(
+            (f) =>
+              `<li><i class="fa-regular fa-file"></i>${escapeHtml(f.name)}</li>`,
+          )
+          .join("") +
+        (files.length > shown.length
+          ? `<li class="up-more">… and ${files.length - shown.length} more</li>`
+          : "") +
+        `</ul>`
+      );
+    }
+
+    /**
+     * Before an upload: for each picked drawing whose name matches one
+     * already on the assembly (ignoring case and outer spaces), ask
+     * whether to replace the existing file or skip the new one. Replacing
+     * is the same as the Replace button — it asks about a pending request
+     * it would withdraw, other places using the file, and a reason when
+     * the existing drawing is public or the replace reaches other places.
+     *
+     * Resolves to null when the user cancelled (upload nothing), else
+     *   { drawings: File[]  — new names, to upload as usual,
+     *     replace:  null | { files, targetIds, reason, linked },
+     *     skipped:  File[] }
+     */
+    async function _planDuplicateDrawings(assemblyId, picked) {
+      const assembly = allAssemblies.find(
+        (a) => String(a._id) === String(assemblyId),
+      );
+      const key = (n) => String(n || "").trim().toLowerCase();
+      const existingByName = new Map();
+      ((assembly && assembly.drawingFiles) || []).forEach((f) => {
+        const k = key(f.originalName);
+        if (!existingByName.has(k)) existingByName.set(k, []);
+        existingByName.get(k).push(f);
+      });
+      const dupes = picked.filter((f) => existingByName.has(key(f.name)));
+      const drawings = picked.filter((f) => !existingByName.has(key(f.name)));
+      if (!dupes.length) return { drawings, replace: null, skipped: [] };
+
+      const toReplace = await _askReplaceOrSkip(
+        dupes,
+        (f) => existingByName.get(key(f.name)),
+        drawings.length,
+      );
+      if (toReplace === null) return null;
+      const skipped = dupes.filter((f) => !toReplace.includes(f));
+      if (!toReplace.length) return { drawings, replace: null, skipped };
+
+      const targets = toReplace.flatMap((f) => existingByName.get(key(f.name)));
+      const targetIds = targets.map((f) => String(f._id));
+      if (!(await _confirmSupersede(assemblyId, targetIds))) return null;
+      const linked = await _chooseLinkedReplacements(
+        assemblyId,
+        targetIds,
+        toReplace,
+      );
+      if (linked === null) return null;
+      // As in requestReplaceDrawing: only your own still-private uploads
+      // replace without a reason.
+      const freeToReplace = (f) =>
+        f.isPublic === false &&
+        (f.isMine === true ||
+          (currentUserId && String(f.uploadedBy || "") === currentUserId));
+      let reason = "";
+      if (linked.length || !targets.every(freeToReplace)) {
+        reason = await _promptReplaceReason(null, assemblyId);
+        if (reason === null) return null;
+      }
+      return {
+        drawings,
+        replace: { files: toReplace, targetIds, reason, linked },
+        skipped,
+      };
+    }
+
+    /**
+     * The "File already exists" dialog. One file: Replace / Skip buttons.
+     * Several: a Replace / Skip choice per file. Resolves to the files to
+     * replace ([] = skip them all), or null for Cancel upload.
+     *
+     * @param {File[]}   dupes        picked files whose name is taken
+     * @param {Function} existingFor  file → the drawings it would replace
+     * @param {Number}   newCount     other picked drawings (upload as new)
+     */
+    async function _askReplaceOrSkip(dupes, existingFor, newCount) {
+      const fmt = (d) =>
+        d
+          ? new Date(d).toLocaleString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+          : "";
+      const describe = (f) => {
+        const ex = existingFor(f);
+        const anyPublic = ex.some((e) => e.isPublic !== false);
+        return (
+          (ex.length > 1
+            ? `${ex.length} files with this name are on this assembly`
+            : `Uploaded ${fmt(ex[0].uploadedAt)}${ex[0].isPublic === false ? " · private" : " · public"}`) +
+          (anyPublic ? " — replacing needs a reason and approval" : "")
+        );
+      };
+      const otherNote = newCount
+        ? `<div class="dup-note">The other ${newCount} file${newCount === 1 ? "" : "s"} will upload as new.</div>`
+        : "";
+
+      if (dupes.length === 1) {
+        const f = dupes[0];
+        const r = await Swal.fire({
+          icon: "warning",
+          title: "File already exists",
+          html:
+            `<div class="dup-intro">A file named <b>${escapeHtml(f.name)}</b> is already on this assembly.</div>` +
+            `<div class="dup-sub">${escapeHtml(describe(f))}</div>` +
+            `<div class="dup-intro">Replace the existing file with the new one, or skip the new one and don't upload it?</div>` +
+            otherNote,
+          width: 560,
+          showDenyButton: true,
+          showCancelButton: true,
+          confirmButtonText: "Replace existing",
+          denyButtonText: "Skip this file",
+          cancelButtonText: "Cancel upload",
+          confirmButtonColor: "#2a5071",
+          denyButtonColor: "#6c757d",
+          customClass: { container: "swal-above-bs-modal" },
+        });
+        if (r.isConfirmed) return [f];
+        if (r.isDenied) return [];
+        return null;
+      }
+
+      const rows = dupes
+        .map(
+          (f, i) => `
+              <div class="dup-row">
+                <div class="dup-name">
+                  <b>${escapeHtml(f.name)}</b>
+                  <span class="dup-sub">${escapeHtml(describe(f))}</span>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="${escapeHtml(f.name)}">
+                  <input type="radio" class="btn-check dup-pick" name="dupPick${i}" id="dupR${i}" value="replace" data-i="${i}" checked>
+                  <label class="btn btn-outline-primary" for="dupR${i}">Replace</label>
+                  <input type="radio" class="btn-check dup-pick" name="dupPick${i}" id="dupS${i}" value="skip" data-i="${i}">
+                  <label class="btn btn-outline-secondary" for="dupS${i}">Skip</label>
+                </div>
+              </div>`,
+        )
+        .join("");
+      const r = await Swal.fire({
+        icon: "warning",
+        title: `${dupes.length} files already exist`,
+        html:
+          `<div class="dup-intro">These files have the same name as files already on this assembly. For each one, replace the existing file or skip the new one.</div>` +
+          `<div class="dup-tools"><a href="#" id="dupAllR">Replace all</a> · <a href="#" id="dupAllS">Skip all</a></div>` +
+          `<div class="dup-list">${rows}</div>` +
+          otherNote,
+        width: 680,
+        showCancelButton: true,
+        confirmButtonText: "Continue",
+        cancelButtonText: "Cancel upload",
+        confirmButtonColor: "#2a5071",
+        customClass: { container: "swal-above-bs-modal" },
+        didOpen: (popup) => {
+          const picks = () => [...popup.querySelectorAll(".dup-pick:checked")];
+          const sync = () => {
+            const n = picks().filter((p) => p.value === "replace").length;
+            const parts = [];
+            if (n) parts.push(`replace ${n}`);
+            if (dupes.length - n) parts.push(`skip ${dupes.length - n}`);
+            const text = parts.join(", ");
+            Swal.getConfirmButton().textContent =
+              `Continue — ${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+          };
+          popup
+            .querySelectorAll(".dup-pick")
+            .forEach((p) => p.addEventListener("change", sync));
+          const setAll = (value) => (e) => {
+            e.preventDefault();
+            popup
+              .querySelectorAll(`.dup-pick[value="${value}"]`)
+              .forEach((p) => (p.checked = true));
+            sync();
+          };
+          popup.querySelector("#dupAllR").addEventListener("click", setAll("replace"));
+          popup.querySelector("#dupAllS").addEventListener("click", setAll("skip"));
+          sync();
+        },
+        preConfirm: () =>
+          [...Swal.getPopup().querySelectorAll(".dup-pick:checked")]
+            .filter((p) => p.value === "replace")
+            .map((p) => dupes[Number(p.dataset.i)]),
+      });
+      return r.isConfirmed ? r.value || [] : null;
     }
 
     // "Uploading 2 drawings and 1 BOM file…" — names whichever kinds are
@@ -3124,7 +3547,68 @@
 
     let _bomModalAssemblyId = null;
 
+    // YDAstra button beside BOM (only rendered when the row has a BOM):
+    // opens the assembly's BOMs merged into one table. The all-pending
+    // view has no single project, so take the row's own.
+    function openYdAstra(assemblyId) {
+      const a = allAssemblies.find((x) => String(x._id) === String(assemblyId));
+      const pid = (a && a.projectId) || projectId;
+      window.location.href = `ydAstra.html?project=${encodeURIComponent(pid)}&assembly=${encodeURIComponent(assemblyId)}`;
+    }
+
+    // BOMs ticked in the BOM modal, for Download / Replace / Delete
+    // Selected (as in the drawings modal, without Make Visible — BOMs have
+    // no private window).
+    let selectedBomIds = new Set();
+
+    function _bomModalFiles() {
+      const assembly = allAssemblies.find(
+        (a) => a._id === _bomModalAssemblyId,
+      );
+      return (assembly && assembly.bomFiles) || [];
+    }
+
+    // The ticked BOMs that are still on the assembly.
+    function _selectedBomFiles() {
+      return _bomModalFiles().filter((f) => selectedBomIds.has(String(f._id)));
+    }
+
+    // Ticking only repaints the toolbar, so the preview below isn't
+    // reloaded on every click.
+    function _paintBomSelection() {
+      const ids = _bomModalFiles().map((f) => String(f._id));
+      const n = ids.filter((id) => selectedBomIds.has(id)).length;
+      const all = document.getElementById("bomSelectAll");
+      if (!all) return;
+      all.checked = ids.length > 0 && n === ids.length;
+      all.indeterminate = n > 0 && n < ids.length;
+      document.getElementById("bomSelCount").textContent = `${n} selected`;
+      document
+        .querySelectorAll("#bomModalBody .bom-sel-action")
+        .forEach((b) => (b.disabled = n === 0));
+      document.querySelectorAll("#bomModalBody .bom-pick").forEach((cb) => {
+        cb.checked = selectedBomIds.has(cb.dataset.id);
+      });
+    }
+
+    function toggleBomSelection(fileId) {
+      const id = String(fileId);
+      if (selectedBomIds.has(id)) selectedBomIds.delete(id);
+      else selectedBomIds.add(id);
+      _paintBomSelection();
+    }
+
+    function toggleSelectAllBoms(cb) {
+      _bomModalFiles().forEach((f) =>
+        cb.checked
+          ? selectedBomIds.add(String(f._id))
+          : selectedBomIds.delete(String(f._id)),
+      );
+      _paintBomSelection();
+    }
+
     function openBomModal(assemblyId) {
+      if (_bomModalAssemblyId !== assemblyId) selectedBomIds = new Set();
       _bomModalAssemblyId = assemblyId;
       renderBomModal();
       const modalEl = document.getElementById("bomModal");
@@ -3182,6 +3666,7 @@
           return `
               <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 flex-wrap gap-2">
                 <div class="d-flex align-items-center flex-grow-1 me-2" style="min-width:0;">
+                  <input type="checkbox" class="form-check-input flex-shrink-0 me-2 bom-pick" data-id="${f._id}" onchange="toggleBomSelection('${f._id}')"${selectedBomIds.has(String(f._id)) ? " checked" : ""} title="Select this BOM">
                   <i class="fa fa-file-excel me-2 text-success fa-lg"></i>
                   <div style="min-width:0;">
                     <div class="fw-semibold text-truncate" title="${escapeHtml(f.originalName || f.fileKey)}">${escapeHtml(f.originalName || "bom")}${pendBadge}</div>
@@ -3198,8 +3683,34 @@
         })
         .join("");
 
+      // Like the drawings modal: the count and Select All on one line,
+      // then every action on one row — Add BOM(s), then the ones on the
+      // ticked BOMs.
+      const selToolbar = `
+          <div class="d-flex align-items-center mb-2 gap-3">
+            <span class="text-muted small">${boms.length} BOM${boms.length === 1 ? "" : "s"}</span>
+            <div class="form-check mb-0">
+              <input type="checkbox" class="form-check-input" id="bomSelectAll" onchange="toggleSelectAllBoms(this)">
+              <label class="form-check-label small fw-semibold" for="bomSelectAll">Select All</label>
+              <span class="text-muted small ms-2" id="bomSelCount">0 selected</span>
+            </div>
+          </div>
+          <div class="d-flex align-items-center mb-2 flex-wrap gap-2 border-top pt-2">
+              ${addBtn.replace(" mb-3", "")}
+              <button type="button" class="btn btn-sm btn-outline-primary bom-sel-action" onclick="downloadSelectedBoms()" disabled>
+                <i class="fa fa-download me-1"></i>Download Selected
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-warning design-only bom-sel-action" onclick="replaceSelectedBoms('${assembly._id}')" disabled>
+                <i class="fa fa-arrows-rotate me-1"></i>Replace Selected
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger design-only bom-sel-action" onclick="deleteSelectedBoms('${assembly._id}')" disabled>
+                <i class="fa fa-trash me-1"></i>Delete Selected
+              </button>
+          </div>`;
+
       bodyEl.innerHTML =
-        addBtn + listHtml + '<div id="bomPreview" class="mt-2"></div>';
+        selToolbar + listHtml + '<div id="bomPreview" class="mt-2"></div>';
+      _paintBomSelection();
 
       // Auto-preview the first BOM.
       previewBom(0);
@@ -3283,31 +3794,37 @@
       }
     }
 
-    // Replace one BOM with a new file. Like a public-drawing replace, the
-    // swap waits on the project PM's impact note and then on approval; the
-    // current BOM stays until then.
-    async function replaceAssemblyBom(assemblyId, fileId) {
+    // Replace one BOM — or several, from Replace Selected — with new
+    // file(s). Like a public-drawing replace, the swap waits on the project
+    // PM's impact note and then on approval; the current BOMs stay until
+    // then. The new files replace the chosen BOMs as one group.
+    async function replaceAssemblyBom(assemblyId, fileIds) {
+      const ids = [].concat(fileIds).map(String);
+      const many = ids.length > 1;
       const picked = await _pickFiles({
-        multiple: false,
+        multiple: many,
         accept: ".xls,.xlsx,.csv",
       });
       if (!picked.length) return;
-      // Your own BOM within its first hour is swapped straight away (no
+      // Your own BOMs within their first hour are swapped straight away (no
       // reason, no approval) — same rule the server applies.
       const asm = allAssemblies.find((a) => String(a._id) === String(assemblyId));
-      const bom = ((asm && asm.bomFiles) || []).find((f) => String(f._id) === String(fileId));
+      const boms = ((asm && asm.bomFiles) || []).filter((f) =>
+        ids.includes(String(f._id)),
+      );
       const mineFresh =
-        bom &&
-        currentUserId &&
-        String(bom.uploadedBy || "") === currentUserId &&
-        bom.uploadedAt &&
-        Date.now() - new Date(bom.uploadedAt).getTime() <= 60 * 60 * 1000;
-      const reason = mineFresh
-        ? ""
-        : await _promptReplaceReason(
-          "Replacing a BOM needs approval — the project's PM notes the impact first. Please describe why it must be replaced.",
-          assemblyId,
+        boms.length > 0 &&
+        boms.every(
+          (bom) =>
+            currentUserId &&
+            String(bom.uploadedBy || "") === currentUserId &&
+            bom.uploadedAt &&
+            Date.now() - new Date(bom.uploadedAt).getTime() <= 60 * 60 * 1000,
         );
+      const askWhy = many
+        ? `Replacing ${ids.length} BOMs needs approval — the project's PM notes the impact first. Please describe why they must be replaced.`
+        : "Replacing a BOM needs approval — the project's PM notes the impact first. Please describe why it must be replaced.";
+      const reason = mineFresh ? "" : await _promptReplaceReason(askWhy, assemblyId);
       if (reason === null) return;
       const upload = (why) => {
         Swal.fire({
@@ -3317,7 +3834,7 @@
         });
         const formData = new FormData();
         picked.forEach((f) => formData.append("bomFile", f));
-        formData.append("replaceFileIds", JSON.stringify([fileId]));
+        formData.append("replaceFileIds", JSON.stringify(ids));
         formData.append("reason", why);
         return _xhrUpload(
           `${API_URL}/kickoffRoutes/requestReplaceBom/${assemblyId}`,
@@ -3333,13 +3850,11 @@
           // The first hour ran out (or the clocks differ): the server now
           // wants a reason — ask for it and send again.
           if (!(err && err.data && err.data.needsReason) || reason) throw err;
-          const why = await _promptReplaceReason(
-            "Replacing a BOM needs approval — the project's PM notes the impact first. Please describe why it must be replaced.",
-            assemblyId,
-          );
+          const why = await _promptReplaceReason(askWhy, assemblyId);
           if (why === null) return;
           data = await upload(why);
         }
+        ids.forEach((id) => selectedBomIds.delete(id));
         await loadAssemblies();
         renderBomModal();
         await Swal.fire({
@@ -3399,6 +3914,98 @@
       } catch (err) {
         Swal.fire("Error", err.message || "Delete failed", "error");
       }
+    }
+
+    // ── Actions on the SELECTED BOMs ─────────────────────────────────
+    async function downloadSelectedBoms() {
+      const selected = _selectedBomFiles();
+      if (!selected.length)
+        return Swal.fire("Select files", "Choose at least one BOM.", "info");
+      for (const f of selected) {
+        await downloadAssemblyDrawing(
+          encodeURIComponent(f.fileKey),
+          encodeURIComponent(f.originalName || "bom"),
+        );
+      }
+    }
+
+    async function replaceSelectedBoms(assemblyId) {
+      const selected = _selectedBomFiles();
+      if (!selected.length)
+        return Swal.fire("Select files", "Choose at least one BOM.", "info");
+      await replaceAssemblyBom(
+        assemblyId,
+        selected.map((f) => String(f._id)),
+      );
+    }
+
+    // ONE request for the whole selection: your own BOMs in their first
+    // hour go at once, the rest become a single approval ticket.
+    async function deleteSelectedBoms(assemblyId) {
+      const ids = _selectedBomFiles().map((f) => String(f._id));
+      if (!ids.length)
+        return Swal.fire("Select files", "Choose at least one BOM.", "info");
+      const ok = await Swal.fire({
+        icon: "warning",
+        title: `Delete ${ids.length} BOM file${ids.length === 1 ? "" : "s"}?`,
+        text: "Past the first hour after upload, these need Superadmin / COO-VP approval.",
+        showCancelButton: true,
+        confirmButtonText: "Delete",
+        confirmButtonColor: "#d33",
+        customClass: { container: "swal-above-bs-modal" },
+      });
+      if (!ok.isConfirmed) return;
+      const send = (reason) =>
+        fetch(`${API_URL}/kickoffRoutes/deleteBoms/${assemblyId}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ fileIds: ids, reason }),
+        }).then(async (res) => ({ res, data: await res.json() }));
+      let data = null;
+      try {
+        _showBusy(
+          `Deleting ${ids.length} BOM file${ids.length === 1 ? "" : "s"}…`,
+          "Please wait…",
+        );
+        let res;
+        ({ res, data } = await send(""));
+        if (res.status === 400 && data.needsReason) {
+          Swal.close();
+          const reason = await _promptDeleteReason(
+            ids.length === 1 ? "BOM" : `${ids.length} BOMs`,
+          );
+          if (reason === null) return;
+          _showBusy(
+            `Deleting ${ids.length} BOM file${ids.length === 1 ? "" : "s"}…`,
+            "Please wait…",
+          );
+          ({ res, data } = await send(reason));
+        }
+        if (!res.ok || !data.success)
+          throw new Error(data.message || "Delete failed.");
+      } catch (err) {
+        Swal.close();
+        return Swal.fire("Error", err.message || "Network error.", "error");
+      }
+      selectedBomIds = new Set();
+      await loadAssemblies();
+      renderBomModal();
+      Swal.fire({
+        icon: data.pending ? "info" : "success",
+        title: "Done",
+        html:
+          `Deleted: ${data.deleted || 0}` +
+          (data.pending ? `<br>Awaiting approval: ${data.pending}` : "") +
+          (data.supersededCount
+            ? `<br>Earlier pending requests withdrawn: ${data.supersededCount}`
+            : "") +
+          (data.notFound ? `<br>Not found: ${data.notFound}` : ""),
+        timer: 3000,
+        customClass: { container: "swal-above-bs-modal" },
+      });
     }
 
     async function viewAssemblyDrawing(encodedKey) {
@@ -3627,7 +4234,7 @@
               <label class="rr-reason-label" for="rrReason">Reason <span class="text-danger">*</span></label>
               <div class="rr-hint">${escapeHtml(
               inputLabel ||
-              "This drawing is public, so the swap needs Superadmin / COO-VP approval. Please describe why it must be replaced.",
+              "Replacing a drawing needs approval — the project's PM notes the impact first. Please describe why it must be replaced."
             )}</div>
               <textarea id="rrReason" class="form-control" rows="4" maxlength="${MAX}" autocomplete="off"
                 placeholder="e.g. revised dimensions per client RFC dated 26-May"></textarea>
@@ -3674,11 +4281,11 @@
      * The "Drawing / BOM requests" list: drawing and BOM replacements and
      * deletions, one tab per status —
      *   Pending approval  with the project's PM (impact note) or the
-     *                     approvers: who it's still waiting on
+     *                     approvers
      *   Approved          applied: who approved it and when
      *   Rejected          who rejected it, when and their reason
-     * Each row also shows the project, assembly, files, and who asked and
-     * why. Withdrawn requests are in none of the tabs. Opens on this
+     * Each row also shows the project, its PM, assembly, files, and who
+     * asked and why. Withdrawn requests are in none of the tabs. Opens on this
      * project; "All projects" widens it. On the cross-project pending
      * view it starts on all projects.
      */
@@ -3729,19 +4336,14 @@
         counts = data.counts || counts;
         return true;
       };
-      // Columns that differ by tab; the rest are shared.
+      // Columns that differ by tab; the rest are shared. Pending has no
+      // last column.
       const COLS = {
         pending: {
           when: ["Requested on", (r) => fmt(r.requestedAt)],
           newFiles: "New file(s)",
           newCls: "rj-new-wait",
-          last: [
-            "Waiting on",
-            (r) =>
-              r.stage === "pm-review"
-                ? `The project's PM — impact note${r.pmDueAt ? `<span class="rj-sub">Goes on to the approvers ${escapeHtml(fmt(r.pmDueAt))} if not written</span>` : ""}`
-                : `${names(r.waitingOn)}${r.approvedBy.length ? `<span class="rj-sub">Approved so far: ${names(r.approvedBy)}</span>` : ""}`,
-          ],
+          last: null,
         },
         approved: {
           when: ["Approved on", (r) => fmt(r.approvedAt)],
@@ -3778,14 +4380,16 @@
             [
               r.projectNo,
               r.clientName,
+              r.projectManager,
               r.assemblyLabel,
               r.label,
               ...(r.oldNames || []),
               ...(r.newNames || []),
               r.requestedByName,
               r.requestReason,
-              ...(r.waitingOn || []),
-              ...(r.approvedBy || []),
+              r.pmImpact,
+              // Only what the tab shows: approvers on Approved.
+              ...(tab === "approved" ? r.approvedBy || [] : []),
               r.rejectedByName,
               r.rejectionNote,
             ]
@@ -3801,21 +4405,22 @@
         popup.querySelector("#rjBody").innerHTML = shown.length
           ? `<table class="rj-table">
                 <thead><tr>
-                  <th>${c.when[0]}</th><th>Project</th><th>Assembly</th><th>Request</th>
+                  <th>${c.when[0]}</th><th>Project</th><th>PM</th><th>Assembly</th><th>Request</th>
                   <th>Current file(s)</th><th>${c.newFiles}</th>
-                  <th>Requested by</th><th>${c.last[0]}</th>
+                  <th>Requested by</th>${c.last ? `<th>${c.last[0]}</th>` : ""}
                 </tr></thead>
                 <tbody>${shown
             .map(
               (r) => `<tr>
                       <td>${escapeHtml(c.when[1](r))}</td>
                       <td><b>${escapeHtml(r.projectNo || "—")}</b>${r.clientName ? `<span class="rj-sub">${escapeHtml(r.clientName)}</span>` : ""}</td>
+                      <td>${escapeHtml(r.projectManager || "—")}</td>
                       <td>${escapeHtml(r.assemblyLabel || "—")}</td>
                       <td>${escapeHtml(r.label)}</td>
                       <td>${files(r.oldNames, "rj-old")}</td>
                       <td>${r.newNames.length ? files(r.newNames, c.newCls) : '<span class="rj-sub">(delete)</span>'}</td>
                       <td>${escapeHtml(r.requestedByName || "—")}<span class="rj-sub">${escapeHtml(fmt(r.requestedAt))}</span>${r.requestReason ? `<span class="rj-sub">Reason: ${escapeHtml(r.requestReason)}</span>` : ""}${r.pmImpact ? `<span class="rj-sub">PM impact: ${escapeHtml(r.pmImpact)}</span>` : ""}</td>
-                      <td>${c.last[1](r)}</td>
+                      ${c.last ? `<td>${c.last[1](r)}</td>` : ""}
                     </tr>`,
             )
             .join("")}</tbody>
@@ -3847,7 +4452,7 @@
       }
       Swal.fire({
         title: "Drawing / BOM requests",
-        width: 1200,
+        width: "96vw",
         showConfirmButton: false,
         showCloseButton: true,
         customClass: { container: "swal-above-bs-modal" },
@@ -4002,6 +4607,12 @@
     /**
      * @param {String[]} linkedAssemblyIds  other assemblies holding the
      *   same drawing file to replace too (see _chooseLinkedReplacements)
+     * @param {Object}   [opts]
+     * @param {Object}   [opts.tracker]  a shared progress handle from
+     *   _openUploadProgress (an upload that also replaces same-named
+     *   files). With one, the caller's bar covers the whole job and this
+     *   returns the server's reply and throws on failure, leaving the
+     *   reload and the message to the caller.
      */
     async function _submitReplaceDrawings(
       assemblyId,
@@ -4009,76 +4620,31 @@
       files,
       reason,
       linkedAssemblyIds = [],
+      opts = {},
     ) {
-      const totalBytes = files.reduce((s, f) => s + (f.size || 0), 0);
-      // Stage the new files in batches (≤15 MB / ≤25 files) so a big replace
-      // never trips the request-size limit (413); then commit with a small
-      // JSON request holding just the staged keys.
-      const chunks = _chunkFilesBySize(files, 15 * 1024 * 1024, 25);
+      if (opts.tracker)
+        return _stageAndCommitReplace(
+          assemblyId,
+          replaceFileIds,
+          files,
+          reason,
+          linkedAssemblyIds,
+          opts.tracker,
+        );
 
-      Swal.fire({
-        title: `Uploading ${files.length} drawing${files.length === 1 ? "" : "s"}…`,
-        html:
-          '<div class="progress" style="height:22px;">' +
-          '<div id="dwgUploadBar" class="progress-bar progress-bar-striped progress-bar-animated dwg-upload-bar" role="progressbar" style="width:0%;">0%</div>' +
-          "</div>" +
-          '<div id="dwgUploadInfo" class="small text-muted mt-2">Starting…</div>',
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showConfirmButton: false,
+      const bar = _openUploadProgress({
+        title: _uploadTitle(files.length, 0),
+        totalBytes: files.reduce((s, f) => s + (f.size || 0), 0),
+        totalFiles: files.length,
       });
-
-      let completedBytes = 0;
-      let uploadedCount = 0;
-      const setBar = (loadedInChunk, note) => {
-        const overall = totalBytes
-          ? Math.round(((completedBytes + loadedInChunk) / totalBytes) * 100)
-          : 0;
-        const bar = document.getElementById("dwgUploadBar");
-        const info = document.getElementById("dwgUploadInfo");
-        if (bar) {
-          bar.style.width = overall + "%";
-          bar.textContent = overall + "%";
-        }
-        if (info)
-          info.textContent =
-            note ||
-            `${_fmtBytes(completedBytes + loadedInChunk)} of ${_fmtBytes(totalBytes)} · ${uploadedCount}/${files.length} files`;
-      };
-
       try {
-        // 1. Stage every new file (chunked).
-        const staged = [];
-        for (const chunk of chunks) {
-          const chunkBytes = chunk.reduce((s, f) => s + (f.size || 0), 0);
-          const fd = new FormData();
-          chunk.forEach((f) => fd.append("drawingFile", f));
-          const data = await _xhrUpload(
-            `${API_URL}/kickoffRoutes/stageDrawings/${assemblyId}`,
-            fd,
-            (pct, loaded) => setBar(loaded),
-          );
-          (data.staged || []).forEach((s) => staged.push(s));
-          completedBytes += chunkBytes;
-          uploadedCount += chunk.length;
-          setBar(0);
-        }
-
-        // 2. Commit the replace with the staged keys (small request).
-        setBar(0, "Finalizing…");
-        const commit = new FormData();
-        commit.append("replaceFileIds", JSON.stringify(replaceFileIds));
-        if (reason) commit.append("reason", reason);
-        commit.append("stagedFiles", JSON.stringify(staged));
-        if (linkedAssemblyIds.length)
-          commit.append(
-            "alsoReplaceAssemblyIds",
-            JSON.stringify(linkedAssemblyIds),
-          );
-        const data = await _xhrUpload(
-          `${API_URL}/kickoffRoutes/requestReplaceDrawings/${assemblyId}`,
-          commit,
-          () => { },
+        const data = await _stageAndCommitReplace(
+          assemblyId,
+          replaceFileIds,
+          files,
+          reason,
+          linkedAssemblyIds,
+          bar,
         );
         // Re-fetch either way. On the auto-apply path the file list itself
         // changed; on the approval path the new ticket has to land in
@@ -4091,11 +4657,7 @@
         renderDrawingsModal();
         await Swal.fire({
           icon: "success",
-          title: data.pmReview
-            ? "Sent to the PM"
-            : data.pendingApproval
-              ? "Awaiting approval"
-              : "Replaced",
+          title: _replaceOutcomeTitle(data),
           text: data.message,
           // "…an earlier request was withdrawn" and the other projects'
           // outcomes are worth reading, so give them longer on screen.
@@ -4108,6 +4670,57 @@
       }
     }
 
+    function _replaceOutcomeTitle(data) {
+      return data.pmReview
+        ? "Sent to the PM"
+        : data.pendingApproval
+          ? "Awaiting approval"
+          : "Replaced";
+    }
+
+    // Stage the new files in batches (≤15 MB / ≤25 files) so a big replace
+    // never trips the request-size limit (413); then commit with a small
+    // JSON request holding just the staged keys. Progress goes to `bar`
+    // (see _openUploadProgress). Resolves to the server's reply.
+    async function _stageAndCommitReplace(
+      assemblyId,
+      replaceFileIds,
+      files,
+      reason,
+      linkedAssemblyIds,
+      bar,
+    ) {
+      const staged = [];
+      for (const chunk of _chunkFilesBySize(files, 15 * 1024 * 1024, 25)) {
+        const chunkBytes = chunk.reduce((s, f) => s + (f.size || 0), 0);
+        const fd = new FormData();
+        chunk.forEach((f) => fd.append("drawingFile", f));
+        const data = await _xhrUpload(
+          `${API_URL}/kickoffRoutes/stageDrawings/${assemblyId}`,
+          fd,
+          (pct, loaded) => bar.progress(loaded),
+        );
+        (data.staged || []).forEach((s) => staged.push(s));
+        bar.chunkDone(chunkBytes, chunk.length);
+      }
+      const info = document.getElementById("dwgUploadInfo");
+      if (info) info.textContent = "Finalizing…";
+      const commit = new FormData();
+      commit.append("replaceFileIds", JSON.stringify(replaceFileIds));
+      if (reason) commit.append("reason", reason);
+      commit.append("stagedFiles", JSON.stringify(staged));
+      if (linkedAssemblyIds.length)
+        commit.append(
+          "alsoReplaceAssemblyIds",
+          JSON.stringify(linkedAssemblyIds),
+        );
+      return _xhrUpload(
+        `${API_URL}/kickoffRoutes/requestReplaceDrawings/${assemblyId}`,
+        commit,
+        () => { },
+      );
+    }
+
     // Reason prompt for deleting a PUBLIC drawing (past the 1-hour window).
     // The reason is shown to the Superadmin / COO-VP approvers.
     // `what` names the file in the prompt: "drawing" (default) or "BOM".
@@ -4118,7 +4731,7 @@
         inputLabel:
           what === "drawing"
             ? "This drawing is public, so deleting it needs Superadmin / COO-VP approval. Please describe why."
-            : `Deleting this ${what} needs Superadmin / COO-VP approval. Please describe why.`,
+            : `Deleting ${/^\d/.test(what) ? "these" : "this"} ${what} needs Superadmin / COO-VP approval. Please describe why.`,
         inputPlaceholder: "e.g. wrong revision uploaded, superseded by …",
         inputAttributes: { maxlength: 600, autocomplete: "off" },
         showCancelButton: true,
@@ -4880,13 +5493,48 @@
         .getElementById("btnDownloadCurrentLoe")
         .classList.add("d-none");
       document.getElementById("btnEditExcel").classList.add("d-none");
-      document
-        .querySelectorAll("#filterPendingOnly .show-filter, #filterPendingOnly button")
-        .forEach((el) => (el.disabled = true));
     }
     updateSortIndicators();
 
     loadAssemblies();
+  </script>
+  <!-- Code injected by live-server -->
+  <script>
+    // <![CDATA[  <-- For SVG support
+    if ('WebSocket' in window) {
+      (function () {
+        function refreshCSS() {
+          var sheets = [].slice.call(document.getElementsByTagName("link"));
+          var head = document.getElementsByTagName("head")[0];
+          for (var i = 0; i < sheets.length; ++i) {
+            var elem = sheets[i];
+            var parent = elem.parentElement || head;
+            parent.removeChild(elem);
+            var rel = elem.rel;
+            if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+              var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+              elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+            }
+            parent.appendChild(elem);
+          }
+        }
+        var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+        var address = protocol + window.location.host + window.location.pathname + '/ws';
+        var socket = new WebSocket(address);
+        socket.onmessage = function (msg) {
+          if (msg.data == 'reload') window.location.reload();
+          else if (msg.data == 'refreshcss') refreshCSS();
+        };
+        if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+          console.log('Live reload enabled.');
+          sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+        }
+      })();
+    }
+    else {
+      console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+    }
+    // ]]>
   </script>
 </body>
 

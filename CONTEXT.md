@@ -307,7 +307,13 @@ position (B, D, E, F, H/G).
 - **Assembly (YF):** `YF` + assembly drawing no. without hyphens →
   `YF2630CAR010300000`; description `2630-<ASSEMBLY NAME>`; FERT / FG001.
 - **WBS element:** first four groups of the assembly drawing no. →
-  `2630-CAR-01-03-00-000` → `2630CAR0103`.
+  `2630-CAR-01-03-00-000` → `2630CAR0103`. **Only when the drawing belongs
+  to the same project.** Real PO 4500013990 shows project 2606 reusing
+  2237 drawings: parts keep their old codes (`YS2237LEV010100016`, "TIE ROD
+  (2237LEV)") but the WBS is the current project's `2606TLI0101` (SAP
+  internal no. `00008414`). So the WBS must come from the project /
+  assembly the BOM is uploaded under (or SAP's project API), not from the
+  part numbers.
 - **Drawing part (YS):** `YS` + part no. without hyphens →
   `YS2630TRL010100001`; description `<NAME> (2630TRL)`; HALB / SG001.
 - Limits: code ≤ 18 characters, description ≤ 40. ~1,330 master items are
